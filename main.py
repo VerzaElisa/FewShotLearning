@@ -9,9 +9,9 @@ def test_1_shot_1_way():
     config = {
         "data.dataset": "mammals_calls_short",
         "data.split": "mmd_splits",
-        "data.train_way": 5,
-        "data.train_support": 2,
-        "data.train_query": 2,
+        "data.train_way": 10,
+        "data.train_support": 1,
+        "data.train_query": 1,
         "data.test_way": 1,
         "data.test_support": 1,
         "data.test_query": 1,
@@ -27,7 +27,7 @@ def test_1_shot_1_way():
         "model.save_path": 'mmd.h5'
     }
     train(config)
-    os.remove('mmd.h5')
+    print("Training completed.")
 
 
 if __name__ == "__main__":

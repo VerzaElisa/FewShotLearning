@@ -23,13 +23,16 @@ def train(config):
     np.random.seed(2019)
     tf.random.set_seed(2019)
     print('1. Loading data...')
-    # Creazione cartela per il modello
-    model_dir = config['model.save_path'][:config['model.save_path'].rfind('/')]
+    # Creazione cartella per il modello
+    model_dir = os.path.join("data_cache", "models")
     if not os.path.exists(model_dir):
         os.makedirs(model_dir)
 
     # Creazione del dataset diviso in training e validation
-    data_dir = os.path.join("data", config['data.dataset'])
+    data_dir = {}
+    data_dir['train'] = os.path.join("data", config['data.dataset'], "train")
+    data_dir['val'] = os.path.join("data", config['data.dataset'], "val")
+
     ret = load(data_dir, config, ['train', 'val'])
     train_loader = ret['train']
     val_loader = ret['val']
@@ -60,17 +63,22 @@ def train(config):
 
     @tf.function
     def loss(support, query):
+        # execute loss and accuracy computation given support and query sets doing the forward pass
+        # and return the computed metrics
         loss, acc = model(support, query)
         return loss, acc
 
     @tf.function
-    def train_step(loss_func, support, query):
-        # Forward & update gradients
+    def train_step(model, support, query):
         with tf.GradientTape() as tape:
+            # Forward pass
             loss, acc = model(support, query)
+
+        # Backward pass: returns a list of gradients for each trainable variable
         gradients = tape.gradient(loss, model.trainable_variables)
-        optimizer.apply_gradients(
-            zip(gradients, model.trainable_variables))
+
+        # Update model parameters
+        optimizer.apply_gradients(zip(gradients, model.trainable_variables))
 
         # Log loss and accuracy for step
         train_loss(loss)
@@ -86,6 +94,7 @@ def train(config):
     train_engine = TrainEngine()
 
     # Set hooks on training engine
+    # on_start and on_end hooks just print messages
     def on_start(state):
         print("Training started.")
     train_engine.hooks['on_start'] = on_start
@@ -94,6 +103,7 @@ def train(config):
         print("Training ended.")
     train_engine.hooks['on_end'] = on_end
 
+    # Reset the state of the losses and accuracies at the start of each epoch
     def on_start_epoch(state):
         print(f"Epoch {state['epoch']} started.")
         train_loss.reset_state()
@@ -116,7 +126,7 @@ def train(config):
         if cur_loss < state['best_val_loss']:
             print("Saving new best model with loss: ", cur_loss)
             state['best_val_loss'] = cur_loss
-            model.save(config['model.save_path'])
+            model.save(os.path.join(model_dir, config['model.save_path']))
         val_losses.append(cur_loss)
 
         # Early stopping
@@ -126,19 +136,24 @@ def train(config):
             state['early_stopping_triggered'] = True
     train_engine.hooks['on_end_epoch'] = on_end_epoch
 
+    # Execute training step. The tf.function train_step executes 
+    # the forward and backward pass and updates the model parameters.
     def on_start_episode(state):
-        if state['total_episode'] % 20 == 0:
-            print(f"Episode {state['total_episode']}")
+        
         support, query = state['sample']
-        loss_func = state['loss_func']
-        train_step(loss_func, support, query)
+        train_step(model, support, query)
     train_engine.hooks['on_start_episode'] = on_start_episode
 
     def on_end_episode(state):
         # Validation
+        print("Validating...")
         val_loader = state['val_loader']
+        # loss function is initialized when the train method of TrainEngine is called
         loss_func = state['loss_func']
-        for i_episode in range(config['data.episodes']):
+        
+        # TODO: alla fine di ogni episodio fa validazione n volte con n numero di episodi,
+        # serve farlo? o andrebbe fatta validazione alla fine di ogni epoca?
+        for _ in range(config['data.episodes']):
             support, query = val_loader.get_next_episode()
             val_step(loss_func, support, query)
     train_engine.hooks['on_end_episode'] = on_end_episode
@@ -154,6 +169,6 @@ def train(config):
     time_end = time.time()
 
     elapsed = time_end - time_start
-    h, min = elapsed//3600, elapsed%3600//60
-    sec = elapsed-min*60
-    print(f"Training took: {h} h {min} min {sec} sec")
+    h, min_val = elapsed//3600, elapsed%3600//60
+    sec = elapsed-min_val*60
+    print(f"Training took: {h} h {min_val} min {sec} sec")
