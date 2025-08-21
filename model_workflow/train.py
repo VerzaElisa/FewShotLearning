@@ -27,7 +27,19 @@ def train(config):
     model_dir = os.path.join("data_cache", "models")
     if not os.path.exists(model_dir):
         os.makedirs(model_dir)
-
+    metrics_dir = os.path.join(model_dir, "metrics.csv")
+    if not os.path.exists(metrics_dir):
+        header = "epoch,\
+                  train_loss,val_loss,\
+                  train_accuracy,val_accuracy,\
+                  train_recall_macro,val_recall_macro,\
+                  train_recall_micro,val_recall_micro,\
+                  train_prec_macro,val_prec_macro,\
+                  train_prec_micro,val_prec_micro\n"
+        
+        with open(metrics_dir, 'w') as f:
+            f.write(header)
+    
     # Creazione del dataset diviso in training e validation
     data_dir = {}
     data_dir['train'] = os.path.join("data", config['data.dataset'], "train")
@@ -54,11 +66,19 @@ def train(config):
     optimizer = tf.keras.optimizers.Adam(config['train.lr'])
 
     # Metrics to gather
-    #TODO: generalizzare la scelta delle metriche
     train_loss = tf.metrics.Mean(name='train_loss')
     val_loss = tf.metrics.Mean(name='val_loss')
     train_acc = tf.metrics.Mean(name='train_accuracy')
     val_acc = tf.metrics.Mean(name='val_accuracy')
+    train_recall_macro = tf.metrics.Mean(name='train_recall_macro')
+    val_recall_macro = tf.metrics.Mean(name='val_recall_macro')
+    train_recall_micro = tf.metrics.Mean(name='train_recall_micro')
+    val_recall_micro = tf.metrics.Mean(name='val_recall_micro')
+    train_prec_macro = tf.metrics.Mean(name='train_prec_macro')
+    val_prec_macro = tf.metrics.Mean(name='val_prec_macro')
+    train_prec_micro = tf.metrics.Mean(name='train_prec_micro')
+    val_prec_micro = tf.metrics.Mean(name='val_prec_micro')
+
     val_losses = []
 
     @tf.function
@@ -72,7 +92,7 @@ def train(config):
     def train_step(model, support, query):
         with tf.GradientTape() as tape:
             # Forward pass
-            loss, acc = model(support, query)
+            loss, metrics = model(support, query)
 
         # Backward pass: returns a list of gradients for each trainable variable
         gradients = tape.gradient(loss, model.trainable_variables)
@@ -82,13 +102,21 @@ def train(config):
 
         # Log loss and accuracy for step
         train_loss(loss)
-        train_acc(acc)
+        train_acc(metrics['accuracy'])
+        train_recall_macro(metrics['recall_macro'])
+        train_recall_micro(metrics['recall_micro'])
+        train_prec_macro(metrics['prec_macro'])
+        train_prec_micro(metrics['prec_micro'])
 
     @tf.function
     def val_step(loss_func, support, query):
-        loss, acc = loss_func(support, query)
+        loss, metrics = loss_func(support, query)
         val_loss(loss)
-        val_acc(acc)
+        val_acc(metrics['accuracy'])
+        val_recall_macro(metrics['recall_macro'])
+        val_recall_micro(metrics['recall_micro'])
+        val_prec_macro(metrics['prec_macro'])
+        val_prec_micro(metrics['prec_micro'])
 
     # Create empty training engine
     train_engine = TrainEngine()
@@ -110,9 +138,18 @@ def train(config):
         val_loss.reset_state()
         train_acc.reset_state()
         val_acc.reset_state()
+        train_recall_macro.reset_state()
+        val_recall_macro.reset_state()
+        train_recall_micro.reset_state()
+        val_recall_micro.reset_state()
+        train_prec_macro.reset_state()
+        val_prec_macro.reset_state()
+        train_prec_micro.reset_state()
+        val_prec_micro.reset_state()
     train_engine.hooks['on_start_epoch'] = on_start_epoch
 
     def on_end_epoch(state):
+        metrics_path = os.path.join(model_dir, 'metrics.csv')
         print(f"Epoch {state['epoch']} ended.")
         epoch = state['epoch']
         template = 'Epoch {}, Loss: {}, Accuracy: {}, ' \
@@ -129,6 +166,15 @@ def train(config):
             model.save(os.path.join(model_dir, config['model.save_path']))
         val_losses.append(cur_loss)
 
+        # Metrics saving
+        with open(metrics_path, 'a') as f:
+            f.write(f"{epoch + 1},{train_loss.result().numpy()},{val_loss.result().numpy()},"
+                    f"{train_acc.result().numpy()},{val_acc.result().numpy()},"
+                    f"{train_recall_macro.result().numpy()},{val_recall_macro.result().numpy()},"
+                    f"{train_recall_micro.result().numpy()},{val_recall_micro.result().numpy()},"
+                    f"{train_prec_macro.result().numpy()},{val_prec_macro.result().numpy()},"
+                    f"{train_prec_micro.result().numpy()},{val_prec_micro.result().numpy()}\n")
+        
         # Early stopping
         patience = config['train.patience']
         if len(val_losses) > patience \

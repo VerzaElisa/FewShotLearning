@@ -4,17 +4,16 @@ from model_workflow.train import train
 
 cuda_on = 0
 
-
 def test_1_shot_1_way():
     config = {
         "data.dataset": "mammals_calls_short",
         "data.split": "mmd_splits",
-        "data.train_way": 10,
-        "data.train_support": 1,
-        "data.train_query": 1,
-        "data.test_way": 1,
-        "data.test_support": 1,
-        "data.test_query": 1,
+        "data.train_way": 3,
+        "data.train_support": 5,
+        "data.train_query": 5,
+        "data.test_way": 3,
+        "data.test_support": 5,
+        "data.test_query": 5,
         "data.episodes": 10,
         "data.cuda": cuda_on,
         "data.gpu": 0,

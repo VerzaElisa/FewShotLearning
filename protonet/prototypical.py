@@ -61,7 +61,52 @@ class Prototypical(Model):
             tf.keras.layers.ReLU(),
             tf.keras.layers.MaxPool2D((2, 2)), Flatten()]
         )
+    def metrics(self, log_p_y, y, n_class):
+        metrics_dict = {}
 
+        # accuracy computation
+        y_pred = tf.cast(tf.argmax(log_p_y, axis=-1), tf.int32)
+        y = tf.cast(y, tf.int32)
+        eq = tf.cast(tf.equal(y_pred, y), tf.float32)
+        metrics_dict['accuracy'] = tf.reduce_mean(eq)
+
+        # precision and recall per class
+        prec_list = []
+        recall_list = []
+        tp_list = []
+        fp_list = []
+        fn_list = []
+        for c in range(n_class):
+            y_pred_c = tf.cast(tf.equal(y_pred, c), tf.int32)
+            y_c = tf.cast(tf.equal(y, c), tf.int32)
+            tp = tf.reduce_sum(tf.cast(tf.equal(y_pred_c, y_c), tf.float32))
+            fp = tf.reduce_sum(tf.cast(tf.logical_and(tf.not_equal(y_pred_c, y_c),
+                                    tf.not_equal(y_pred_c, -1)), tf.float32))
+            fn = tf.reduce_sum(tf.cast(tf.logical_and(tf.not_equal(y_pred_c, y_c),
+                                    tf.not_equal(y_c, -1)), tf.float32))
+            precision = tp / (tp + fp + 1e-8)
+            recall = tp / (tp + fn + 1e-8)
+            prec_list.append(precision)
+            recall_list.append(recall)
+            tp_list.append(tp)
+            fp_list.append(fp)
+            fn_list.append(fn)
+
+        # precision macro averaged
+        metrics_dict['prec_macro'] = tf.reduce_mean(tf.stack(prec_list))
+
+        # precision micro averaged
+        metrics_dict['prec_micro'] = tf.reduce_sum(tf.stack(tp_list)) / (tf.reduce_sum(tf.stack(tp_list)) +
+                                                          tf.reduce_sum(tf.stack(fp_list)) + 1e-8)
+        
+        # recall macro averaged
+        metrics_dict['recall_macro'] = tf.reduce_mean(tf.stack(recall_list))
+
+        # recall micro averaged
+        metrics_dict['recall_micro'] = tf.reduce_sum(tf.stack(tp_list)) / (tf.reduce_sum(tf.stack(tp_list)) +
+                                                            tf.reduce_sum(tf.stack(fn_list)) + 1e-8)
+        return metrics_dict
+    
     def call(self, support, query):
         n_class = support.shape[0]
         n_support = support.shape[1]
@@ -96,11 +141,8 @@ class Prototypical(Model):
         log_p_y = tf.reshape(log_p_y, [n_class, n_query, -1])
         
         loss = -tf.reduce_mean(tf.reshape(tf.reduce_sum(tf.multiply(y_onehot, log_p_y), axis=-1), [-1]))
-        eq = tf.cast(tf.equal(
-            tf.cast(tf.argmax(log_p_y, axis=-1), tf.int32), 
-            tf.cast(y, tf.int32)), tf.float32)
-        acc = tf.reduce_mean(eq)
-        return loss, acc
+        metrics = self.metrics(log_p_y, y, n_class)
+        return loss, metrics
 
     def save(self, model_path):
         """

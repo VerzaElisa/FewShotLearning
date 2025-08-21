@@ -143,7 +143,8 @@ def load(data_dirs, config, splits):
         # DataFrame creation and serialization, if already serialized: loading
         if not os.path.exists(ds_df_dir):
             data = pd.DataFrame(records)
-            data['file'] = data['file'].apply(lambda x: load_and_preprocess_image(x))
+            w, h, c = list(map(int, config['model.x_dim'].split(',')))
+            data['file'] = data['file'].apply(lambda x: load_and_preprocess_image(x, height=h, width=w))
             data.to_pickle(ds_df_dir)
             print(f"Data saved to {ds_df_dir}")
             
