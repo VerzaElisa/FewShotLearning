@@ -76,13 +76,13 @@ def from_df_to_dict(data):
         data_dict[i] = class_data
     return data_dict
 
-def configuration(config, split, data_dir):
+def configuration(config, split, classes):
     """
     Configuration for the DataLoader.
     Args:
         config (dict): input dict with model workflow params.
         split (str): 'train'|'val'|'test'
-        data_dir (str): path of the directory with data.
+        classes (list): list of classes path.
     Returns:
         n_way (int): number of classes per episode.
         n_support (int): number of support examples per class.
@@ -107,25 +107,22 @@ def configuration(config, split, data_dir):
         n_query = config['data.test_query']
     else:
         n_query = config['data.train_query']
-
-    # Get all class names
-    class_names = next(os.walk(data_dir))[1]
     
     records = []
-    for class_name in class_names:
-        class_dir = os.path.join(data_dir, class_name)
-        for fname in os.listdir(class_dir):
+    for class_name in classes:
+        for fname in os.listdir(class_name):
             if fname.endswith('.png'):
-                fpath = os.path.join(class_dir, fname)
+                fpath = os.path.join(class_name, fname)
                 records.append({"file": fpath, "label": class_name})
-    return n_way, n_support, n_query, class_names, records
+    return n_way, n_support, n_query, records
 
 def load(data_dirs, config, splits):
     """
     Load dataset.
 
     Args:
-        data_dirs (str): path of the directory with 'splits' subdirs.
+        data_dirs (DataFrame): containing classes with their corresponding set.
+                               The DataFrame must have two columns: 'split' and 'class'.
         config (dict): general dict with program settings.
         splits (list): list of strings 'train'|'val'|'test'
 
@@ -134,11 +131,12 @@ def load(data_dirs, config, splits):
     
     ret = {}
     for split in splits:
-        
         print(f"Loading data for split: {split}")
-        n_way, n_support, n_query, class_names, records = configuration(config, split, data_dirs[split])
+        split_classes = data_dirs[data_dirs['split'] == split]['class']
+        split_classes = split_classes.apply(lambda x: os.path.join(config['data.dataset'], x)).tolist()
+        n_way, n_support, n_query, records = configuration(config, split, split_classes)
         ds_df_dir = os.path.join(DATA_CACHE_DIR, f"ds_{split}.pkl")
-        print(f"Found classes: {class_names}")
+        print(f"Found classes: {split_classes}")
 
         # DataFrame creation and serialization, if already serialized: loading
         if not os.path.exists(ds_df_dir):
@@ -155,7 +153,7 @@ def load(data_dirs, config, splits):
 
         # Create DataLoader instance
         data_loader = DataLoader(data_dict,
-                                 n_classes=len(class_names),
+                                 n_classes=len(split_classes),
                                  n_way=n_way,
                                  n_support=n_support,
                                  n_query=n_query)

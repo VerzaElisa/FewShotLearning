@@ -19,12 +19,18 @@ except Exception as e:
     print(f"Errore nella configurazione: {e}")
 
 
-def train(config):
+def train(config, class_split):
+    """
+    Train the Prototypical Network model.
+    Args:
+        config (dict): Configuration dictionary containing training parameters.
+        class_split (DataFrame): DataFrame containing class names with their corresponding set.
+    """
     np.random.seed(2019)
     tf.random.set_seed(2019)
     print('1. Loading data...')
     # Creazione cartella per il modello
-    model_dir = os.path.join("data_cache", "models")
+    model_dir = os.path.join("data_cache", "proto")
     if not os.path.exists(model_dir):
         os.makedirs(model_dir)
     metrics_dir = os.path.join(model_dir, "metrics.csv")
@@ -41,11 +47,7 @@ def train(config):
             f.write(header)
     
     # Creazione del dataset diviso in training e validation
-    data_dir = {}
-    data_dir['train'] = os.path.join("data", config['data.dataset'], "train")
-    data_dir['val'] = os.path.join("data", config['data.dataset'], "val")
-
-    ret = load(data_dir, config, ['train', 'val'])
+    ret = load(class_split, config, ['train', 'val'])
     train_loader = ret['train']
     val_loader = ret['val']
 
