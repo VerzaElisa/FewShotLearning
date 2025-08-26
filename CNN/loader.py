@@ -9,6 +9,26 @@ np.random.seed(2025)
 tf.random.set_seed(2025)
 rng = np.random.default_rng(seed = 2025)
 
+# Configurazione GPU
+def setup_gpu():
+    gpus = tf.config.experimental.list_physical_devices('GPU')
+    
+    if gpus:
+        try:
+            for gpu in gpus:
+                tf.config.experimental.set_memory_growth(gpu, True)
+            
+            print(f"GPUs found: {len(gpus)}")
+            for i, gpu in enumerate(gpus):
+                print(f"GPU {i}: {gpu}")
+                                
+        except RuntimeError as e:
+            print(f"GPU configuration error: {e}")
+    else:
+        print("No GPU found, using CPU")
+
+setup_gpu()
+
 CNN_CACHE_DIR = os.path.join("data_cache", "CNN")
 if not os.path.exists(CNN_CACHE_DIR):
     print(f"Creating CNN data cache directory at {CNN_CACHE_DIR}")

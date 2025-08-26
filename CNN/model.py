@@ -11,6 +11,27 @@ CHACHE_DIR = os.path.join("data_cache", "CNN")
 tf.random.set_seed(2025)
 np.random.seed(2025)
 
+# Configurazione GPU
+def setup_gpu():
+    gpus = tf.config.experimental.list_physical_devices('GPU')
+    
+    if gpus:
+        try:
+            for gpu in gpus:
+                tf.config.experimental.set_memory_growth(gpu, True)
+            
+            print(f"GPUs found: {len(gpus)}")
+            for i, gpu in enumerate(gpus):
+                print(f"GPU {i}: {gpu}")
+                                
+        except RuntimeError as e:
+            print(f"GPU configuration error: {e}")
+    else:
+        print("No GPU found, using CPU")
+
+setup_gpu()
+
+
 class ReportCallback(tf.keras.callbacks.Callback):
     def __init__(self, valid_dataset, output_path="CNN_metrics.csv"):
         super().__init__()
