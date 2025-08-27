@@ -3,6 +3,7 @@ import numpy as np
 import pandas as pd
 from sklearn.metrics import classification_report
 import tensorflow as tf
+from math import floor
 from tensorflow.keras.layers import Dense, Flatten, Conv2D
 from tensorflow.keras import Model
 from tensorflow.keras.models import load_model
@@ -66,32 +67,21 @@ class ReportCallback(tf.keras.callbacks.Callback):
         df = pd.DataFrame(self.reports)
         df.to_csv(self.output_path, index=False)
 
-def create_model():
-    model = tf.keras.Sequential([
-        tf.keras.layers.Conv2D(filters=64, kernel_size=3, padding='same'),
-        tf.keras.layers.BatchNormalization(),
-        tf.keras.layers.ReLU(),
-        tf.keras.layers.MaxPool2D((2, 2)),
-
-        tf.keras.layers.Conv2D(filters=64, kernel_size=3, padding='same'),
-        tf.keras.layers.BatchNormalization(),
-        tf.keras.layers.ReLU(),
-        tf.keras.layers.MaxPool2D((2, 2)),
-
-        tf.keras.layers.Conv2D(filters=64, kernel_size=3, padding='same'),
-        tf.keras.layers.BatchNormalization(),
-        tf.keras.layers.ReLU(),
-        tf.keras.layers.MaxPool2D((2, 2)),
-
-        tf.keras.layers.Conv2D(filters=64, kernel_size=3, padding='same'),
-        tf.keras.layers.BatchNormalization(),
-        tf.keras.layers.ReLU(),
-        tf.keras.layers.MaxPool2D((2, 2)), 
-        tf.keras.layers.Flatten()
-    ])
+def create_model(w_h, n_classes):
+    initializer = tf.keras.initializers.GlorotNormal(seed=42)
+    model = tf.keras.Sequential()
+    lb = min(w_h)
+    while floor(lb / 2) >= 1:
+        model.add(tf.keras.layers.Conv2D(filters=64, kernel_size=3, padding='same', kernel_initializer=initializer))
+        model.add(tf.keras.layers.BatchNormalization())
+        model.add(tf.keras.layers.ReLU())
+        model.add(tf.keras.layers.MaxPool2D((2, 2)))
+        lb = lb / 2
+    model.add(tf.keras.layers.Flatten())
+    model.add(tf.keras.layers.Dense(n_classes, activation='softmax', kernel_initializer=initializer))
     return model
 
-def train(train_df, valid_df, patience, cp_path, checkpoint_freq=5):
+def train(train_df, valid_df, patience, cp_path, w_h, n_classes, checkpoint_freq=5):
     """
     Train a CNN model using the provided training and validation datasets.
     Args:
@@ -99,6 +89,8 @@ def train(train_df, valid_df, patience, cp_path, checkpoint_freq=5):
         valid_dataset (DataFrame): The validation dataset.
         patience (int): Number of epochs with no improvement after which training will be stopped.
         cp_path (str): Subdirectory to save model checkpoints.
+        w_h (tuple): Width and height for the model input.
+        n_classes (int): Number of output classes.
         checkpoint_freq (int): Frequency (in epochs) to save model checkpoints.
     """
     if not os.path.exists(CHACHE_DIR):
@@ -107,16 +99,7 @@ def train(train_df, valid_df, patience, cp_path, checkpoint_freq=5):
     cp_dir = os.path.join(CHACHE_DIR, cp_path)
     if not os.path.exists(cp_dir):
         os.makedirs(cp_dir)
-
-    train_df['label'] = train_df['label'].astype('category').cat.codes
-    valid_df['label'] = valid_df['label'].astype('category').cat.codes
-    train_dataset = tf.data.Dataset.from_tensor_slices((list(train_df["image"]), list(train_df["label"])))
-    valid_dataset = tf.data.Dataset.from_tensor_slices((list(valid_df["image"]), list(valid_df["label"])))
-
-    train_dataset = train_dataset.shuffle(buffer_size=len(train_df)).batch(32).prefetch(tf.data.AUTOTUNE)
-    valid_dataset = valid_dataset.batch(32).prefetch(tf.data.AUTOTUNE)
-
-    model = create_model()
+    model = create_model(w_h, n_classes)
     model.compile(
         loss='sparse_categorical_crossentropy',
         optimizer=tf.keras.optimizers.RMSprop(),
@@ -124,13 +107,14 @@ def train(train_df, valid_df, patience, cp_path, checkpoint_freq=5):
     )
     es_cb = tf.keras.callbacks.EarlyStopping(monitor='val_loss', patience=patience)
     cp_cb = tf.keras.callbacks.ModelCheckpoint(filepath=os.path.join(cp_dir, 'recovery_weights.weights.h5'), save_weights_only=True, save_freq=checkpoint_freq)
-    log_cb = ReportCallback(valid_dataset, output_path=os.path.join(CHACHE_DIR, 'CNN_metrics.csv'))
-
-    history = model.fit(train_dataset, 
+    log_cb = ReportCallback(valid_df, output_path=os.path.join(CHACHE_DIR, 'CNN_metrics.csv'))
+    print("training")
+    train_cardinality = train_df.reduce(0, lambda x, _: x + 1).numpy()
+    history = model.fit(train_df, 
                         epochs=50, 
-                        validation_data=valid_dataset, 
+                        validation_data=valid_df, 
                         callbacks=[es_cb, cp_cb, log_cb],
-                        batch_size=32
+                        steps_per_epoch=train_cardinality
                         )
     print(history.history)
     model.save(os.path.join(cp_dir, 'final_model.h5'))
