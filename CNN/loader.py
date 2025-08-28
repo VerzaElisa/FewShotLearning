@@ -35,26 +35,41 @@ if not os.path.exists(CNN_CACHE_DIR):
     os.makedirs(CNN_CACHE_DIR)
 
 def preprocess_image(file_path, height=164, width=397):
+    """
+    Load and preprocess an image from a file path.
+    Args:
+        file_path (str): Path to the image file.
+        height (int): Desired height of the output image.
+        width (int): Desired width of the output image.
+    Returns:
+        tf.Tensor: A preprocessed image tensor.
+    """
     image = tf.io.read_file(file_path)
     image = tf.image.decode_png(image, channels=3)
     image = tf.image.resize(image, [height, width])
     image = tf.cast(image, tf.float32) / 255.0
     return image
 
-def load_dataset(img_list, height=164, width=397, batch_size=32, shuffle=True):
+def load_dataset(img_list, height=164, width=397, batch_size=32):
+    """
+    From a list of image paths, create a dataset with 
+    preprocessed and batched images alongside its labels.
+    Args:
+        img_list (list): List of image file paths.
+        height (int): Desired height of the output images.
+        width (int): Desired width of the output images.
+        batch_size (int): Size of the batches of data.
+    Returns:
+        tf.data.Dataset: A TensorFlow Dataset object containing the preprocessed and batched images.
+    """
     labels = [os.path.basename(os.path.dirname(f)) for f in img_list]
+    unique_labels = sorted(set(labels))
+    label_to_index = {label: index for index, label in enumerate(unique_labels)}
+    labels = [label_to_index[label] for label in labels]
+    ds = tf.data.Dataset.from_tensor_slices((img_list, labels))  
 
-    ds = tf.data.Dataset.from_tensor_slices((img_list, labels))
-
-    def _process(file_path, label):
-        image = preprocess_image(file_path, height, width)
-        return image, label   # <-- meglio restituire (immagine, etichetta) per Keras
-
-    ds = ds.map(_process, num_parallel_calls=tf.data.AUTOTUNE)
-
-    if shuffle:
-        ds = ds.shuffle(buffer_size=len(img_list))
-
+    ds = ds.map(lambda file_path, label: (preprocess_image(file_path, height, width), label), num_parallel_calls=tf.data.AUTOTUNE)
+    ds = ds.shuffle(buffer_size=1000, seed=2025)
     ds = ds.batch(batch_size).prefetch(tf.data.AUTOTUNE)
     return ds
 

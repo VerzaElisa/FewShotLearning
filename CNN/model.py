@@ -109,13 +109,14 @@ def train(train_df, valid_df, patience, cp_path, w_h, n_classes, checkpoint_freq
     cp_cb = tf.keras.callbacks.ModelCheckpoint(filepath=os.path.join(cp_dir, 'recovery_weights.weights.h5'), save_weights_only=True, save_freq=checkpoint_freq)
     log_cb = ReportCallback(valid_df, output_path=os.path.join(CHACHE_DIR, 'CNN_metrics.csv'))
     print("training")
-    train_cardinality = train_df.reduce(0, lambda x, _: x + 1).numpy()
+    steps_per_epoch = train_df.reduce(0, lambda x, _: x + 1).numpy()    
     history = model.fit(train_df, 
                         epochs=50, 
                         validation_data=valid_df, 
+                        steps_per_epoch=steps_per_epoch,
                         callbacks=[es_cb, cp_cb, log_cb],
-                        steps_per_epoch=train_cardinality
-                        )
+                        verbose=1)
     print(history.history)
     model.save(os.path.join(cp_dir, 'final_model.h5'))
+
 
