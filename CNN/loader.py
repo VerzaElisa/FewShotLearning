@@ -3,11 +3,14 @@ import numpy as np
 import tensorflow as tf
 import pandas as pd
 from math import floor
-import pickle
+import csv
+import random
 
-np.random.seed(2025)
-tf.random.set_seed(2025)
-rng = np.random.default_rng(seed = 2025)
+seed = 2025
+random.seed(seed)
+np.random.seed(seed)
+tf.random.set_seed(seed)
+rng = np.random.default_rng(seed = seed)
 
 # Configurazione GPU
 def setup_gpu():
@@ -50,7 +53,7 @@ def preprocess_image(file_path, height=164, width=397):
     image = tf.cast(image, tf.float32) / 255.0
     return image
 
-def load_dataset(img_list, height=164, width=397, batch_size=32):
+def load_dataset(img_list, height, width, is_train, batch_size=32,):
     """
     From a list of image paths, create a dataset with 
     preprocessed and batched images alongside its labels.
@@ -58,6 +61,7 @@ def load_dataset(img_list, height=164, width=397, batch_size=32):
         img_list (list): List of image file paths.
         height (int): Desired height of the output images.
         width (int): Desired width of the output images.
+        is_train (bool): Indicates if the dataset is for training.
         batch_size (int): Size of the batches of data.
     Returns:
         tf.data.Dataset: A TensorFlow Dataset object containing the preprocessed and batched images.
@@ -65,11 +69,19 @@ def load_dataset(img_list, height=164, width=397, batch_size=32):
     labels = [os.path.basename(os.path.dirname(f)) for f in img_list]
     unique_labels = sorted(set(labels))
     label_to_index = {label: index for index, label in enumerate(unique_labels)}
+    if is_train:
+        with open(os.path.join(CNN_CACHE_DIR, str(len(unique_labels))+'_label_to_index.csv'), 'w', newline='') as f:
+            writer = csv.writer(f)
+            writer.writerow(['label', 'index'])
+            for label, index in label_to_index.items():
+                writer.writerow([label, index])
+
+
     labels = [label_to_index[label] for label in labels]
     ds = tf.data.Dataset.from_tensor_slices((img_list, labels))  
 
     ds = ds.map(lambda file_path, label: (preprocess_image(file_path, height, width), label), num_parallel_calls=tf.data.AUTOTUNE)
-    ds = ds.shuffle(buffer_size=1000, seed=2025)
+    ds = ds.shuffle(buffer_size=1000, seed=seed)
     ds = ds.batch(batch_size).prefetch(tf.data.AUTOTUNE)
     return ds
 
@@ -103,20 +115,20 @@ def get_split(data_dir, classes, split_perc, h, w):
 
     print("Creating and caching data split...")
     for split in split_perc.keys():
+        train = True if split == 'train' else False
         if split not in ['train', 'val', 'test']:
             raise ValueError(f"Invalid split: {split}. Must be one of 'train', 'val', or 'test'.")
         
         # Get all files for the split based on the split percentage
-        split_len = floor(len(tot_files) * split_perc[split])
+        n_elem = floor(len(tot_files) * split_perc[split])
+        split_len = n_elem if n_elem > 0 else 1
         files_path = [dir_list[i] for i in perm[:split_len]]
         perm = perm[split_len:]
 
         # Apply loading and preprocessing to each element of files list
         print(f"Processing {split} set with {len(files_path)} images...")
-        print(f"lunghezza files_path: {len(files_path)}")
-        print(f"numero classi: {len(classes)}")
-
-        split_ds = load_dataset(files_path, height=h, width=w)
+        batch_size = 32 if len(files_path) >= 32 else len(files_path)
+        split_ds = load_dataset(files_path, height=h, width=w, batch_size=batch_size, is_train=train)
 
         # Insert set into dictionary
         sets[split] = split_ds

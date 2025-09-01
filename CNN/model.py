@@ -1,16 +1,17 @@
 import os
+import random
 import numpy as np
 import pandas as pd
 from sklearn.metrics import classification_report
 import tensorflow as tf
 from math import floor
-from tensorflow.keras.layers import Dense, Flatten, Conv2D
-from tensorflow.keras import Model
-from tensorflow.keras.models import load_model
 
-CHACHE_DIR = os.path.join("data_cache", "CNN")
-tf.random.set_seed(2025)
-np.random.seed(2025)
+
+CACHE_DIR = os.path.join("data_cache", "CNN")
+seed = 2025
+tf.random.set_seed(seed)
+np.random.seed(seed)
+random.seed(seed)
 
 # Configurazione GPU
 def setup_gpu():
@@ -68,7 +69,7 @@ class ReportCallback(tf.keras.callbacks.Callback):
         df.to_csv(self.output_path, index=False)
 
 def create_model(w_h, n_classes):
-    initializer = tf.keras.initializers.GlorotNormal(seed=42)
+    initializer = tf.keras.initializers.GlorotNormal(seed=2025)
     model = tf.keras.Sequential()
     lb = min(w_h)
     while floor(lb / 2) >= 1:
@@ -93,10 +94,10 @@ def train(train_df, valid_df, patience, cp_path, w_h, n_classes, checkpoint_freq
         n_classes (int): Number of output classes.
         checkpoint_freq (int): Frequency (in epochs) to save model checkpoints.
     """
-    if not os.path.exists(CHACHE_DIR):
-        os.makedirs(CHACHE_DIR)
+    if not os.path.exists(CACHE_DIR):
+        os.makedirs(CACHE_DIR)
 
-    cp_dir = os.path.join(CHACHE_DIR, cp_path)
+    cp_dir = os.path.join(CACHE_DIR, cp_path)
     if not os.path.exists(cp_dir):
         os.makedirs(cp_dir)
     model = create_model(w_h, n_classes)
@@ -105,18 +106,15 @@ def train(train_df, valid_df, patience, cp_path, w_h, n_classes, checkpoint_freq
         optimizer=tf.keras.optimizers.RMSprop(),
         metrics=['accuracy'],
     )
-    es_cb = tf.keras.callbacks.EarlyStopping(monitor='val_loss', patience=patience)
+    es_cb = tf.keras.callbacks.EarlyStopping(monitor="val_accuracy", patience=patience, mode="max", min_delta=0.001, restore_best_weights=True)
     cp_cb = tf.keras.callbacks.ModelCheckpoint(filepath=os.path.join(cp_dir, 'recovery_weights.weights.h5'), save_weights_only=True, save_freq=checkpoint_freq)
-    log_cb = ReportCallback(valid_df, output_path=os.path.join(CHACHE_DIR, 'CNN_metrics.csv'))
+    log_cb = ReportCallback(valid_df, output_path=os.path.join(CACHE_DIR, str(n_classes) + '_CNN_metrics.csv'))
     print("training")
-    steps_per_epoch = train_df.reduce(0, lambda x, _: x + 1).numpy()    
     history = model.fit(train_df, 
                         epochs=50, 
                         validation_data=valid_df, 
-                        steps_per_epoch=steps_per_epoch,
-                        callbacks=[es_cb, cp_cb, log_cb],
-                        verbose=1)
+                        callbacks=[es_cb, cp_cb, log_cb])
     print(history.history)
-    model.save(os.path.join(cp_dir, 'final_model.h5'))
+    model.save(os.path.join(CACHE_DIR, str(n_classes) + '_final_model.h5'))
 
 
