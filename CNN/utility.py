@@ -16,7 +16,10 @@ def move_data(cache_dir, models_metrics_dir):
         os.makedirs(models_metrics_dir)
 
     for filename in os.listdir(cache_dir):
+<<<<<<< HEAD
         #eseguire solo se il file non è una cartella
+=======
+>>>>>>> a615c5f (Completato giro di training CNN)
         if os.path.isdir(os.path.join(cache_dir, filename)):
             continue
         src_path = os.path.join(cache_dir, filename)
