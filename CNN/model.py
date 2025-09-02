@@ -42,18 +42,13 @@ class ReportCallback(tf.keras.callbacks.Callback):
         self.reports = [] 
 
     def on_epoch_end(self, epoch, logs=None):
-        y_true = []
-        y_pred = []
+        preds = self.model.predict(self.valid_dataset, verbose=0)
+        y_true = np.concatenate([y for x, y in self.valid_dataset], axis=0)
+        y_pred = np.argmax(preds, axis=1)
 
-        for x, y in self.valid_dataset:
-            preds = self.model.predict(x, verbose=0)
-            y_true.extend(y.numpy())
-            y_pred.extend(np.argmax(preds, axis=1))
-
-        # ottieni il report come dict
         report_dict = classification_report(y_true, y_pred, output_dict=True, zero_division=0)
 
-        # aggiungi l'epoca al dict
+
         flat_report = {"epoch": epoch+1}
         for label, metrics in report_dict.items():
             if isinstance(metrics, dict):
@@ -64,13 +59,17 @@ class ReportCallback(tf.keras.callbacks.Callback):
 
         self.reports.append(flat_report)
 
-        # salva progressivamente su CSV
-        df = pd.DataFrame(self.reports)
-        df.to_csv(self.output_path, index=False)
-
+        mode = 'a' if epoch > 0 else 'w'
+        header = False if epoch > 0 else True
+        
+        df = pd.DataFrame([flat_report])
+        df.to_csv(self.output_path, mode=mode, header=header, index=False)
+        
 def create_model(w_h, n_classes):
     initializer = tf.keras.initializers.GlorotNormal(seed=2025)
-    model = tf.keras.Sequential()
+    model = tf.keras.Sequential([
+        tf.keras.layers.Input(shape=(w_h[1], w_h[0], 3))
+    ])
     lb = min(w_h)
     while floor(lb / 2) >= 1:
         model.add(tf.keras.layers.Conv2D(filters=64, kernel_size=3, padding='same', kernel_initializer=initializer))
