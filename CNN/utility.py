@@ -2,6 +2,9 @@ import os
 from CNN.loader import get_split
 from CNN.model import train
 
+CNN_CACHE_DIR = os.path.join("data_cache", "CNN")
+MODELS_METRICS_DIR = os.path.join("models_metrics")
+
 def move_data(cache_dir, models_metrics_dir):
     """
     Move cached data from the cache directory to the models_metrics directory.
@@ -13,6 +16,9 @@ def move_data(cache_dir, models_metrics_dir):
         os.makedirs(models_metrics_dir)
 
     for filename in os.listdir(cache_dir):
+        #eseguire solo se il file non è una cartella
+        if os.path.isdir(os.path.join(cache_dir, filename)):
+            continue
         src_path = os.path.join(cache_dir, filename)
         dst_path = os.path.join(models_metrics_dir, filename)
         os.rename(src_path, dst_path)
@@ -61,5 +67,5 @@ def train_routine(count_df, patience, split_perc, data_dir, w_h, new_classes, to
     if to_train:
         split_ds = get_split(data_dir, class_list, split_perc, w_h[0], w_h[1])
         train(split_ds['train'], split_ds['val'], patience=patience, cp_path='checkpoints', w_h = (w_h[0], w_h[1]), n_classes=n_classes)
-        move_data()
+        move_data(CNN_CACHE_DIR, MODELS_METRICS_DIR)
     return n_classes
