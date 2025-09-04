@@ -68,7 +68,7 @@ class ReportCallback(tf.keras.callbacks.Callback):
 def create_model(w_h, n_classes):
     initializer = tf.keras.initializers.GlorotNormal(seed=2025)
     model = tf.keras.Sequential([
-        tf.keras.layers.Input(shape=(w_h[1], w_h[0], 3))
+        tf.keras.layers.Input(shape=(w_h[1], w_h[0], 1))
     ])
     lb = min(w_h)
     while floor(lb / 2) >= 1:
