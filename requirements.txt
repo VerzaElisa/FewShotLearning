@@ -3,3 +3,9 @@ tensorflow[and-cuda]
 pandas
 scikit-learn
 matplotlib
+selenium
+soundfile
+scipy
+tqdm
+bs4
+seaborn

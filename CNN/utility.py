@@ -47,7 +47,7 @@ def train_routine(count_df, patience, split_perc, data_dir, w_h, new_classes, to
     Args:
         count_df: DataFrame containing species and their file counts.
         patience: Number of epochs with no improvement after which training will be stopped.
-        split_perc: Dictionary containing the train/validation split percentages.
+        split_perc: Dictionary containing the train/validation split percentages (keys: 'train', 'val', 'test').
         data_dir: Directory containing the images divided into subfolders by class.
         w_h: Tuple containing the width and height to which images will be resized.
         new_classes: Tuple containing the starting index and number of new classes to add.

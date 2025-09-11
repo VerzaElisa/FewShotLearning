@@ -54,7 +54,7 @@ def preprocess_image(file_path, height=164, width=397):
     image = tf.cast(image, tf.float32) / 255.0
     return image
 
-def load_dataset(img_list, height, width, is_train, batch_size=32,):
+def load_dataset(img_list, height, width, is_train, batch_size=32):
     """
     From a list of image paths, create a dataset with 
     preprocessed and batched images alongside its labels.
@@ -83,11 +83,13 @@ def load_dataset(img_list, height, width, is_train, batch_size=32,):
 
     ds = ds.map(lambda file_path, label: (preprocess_image(file_path, height, width), label), num_parallel_calls=tf.data.AUTOTUNE)
     ds = ds.shuffle(buffer_size=1000, seed=seed)
-    ds = ds.batch(batch_size).prefetch(tf.data.AUTOTUNE)
+
+    if batch_size is not None:
+        ds = ds.batch(batch_size).prefetch(tf.data.AUTOTUNE)
     return ds
 
 
-def get_split(data_dir, classes, split_perc, h, w):
+def get_split(data_dir, classes, split_perc, h, w, batch_size=32):  
     """
     Get the training, validation and test sets from the dataset.
     Args:
@@ -128,8 +130,11 @@ def get_split(data_dir, classes, split_perc, h, w):
 
         # Apply loading and preprocessing to each element of files list
         print(f"Processing {split} set with {len(files_path)} images...")
-        batch_size = 32 if len(files_path) >= 32 else len(files_path)
-        split_ds = load_dataset(files_path, height=h, width=w, batch_size=batch_size, is_train=train)
+        if batch_size is not None:
+            bs = batch_size if len(files_path) >= batch_size else len(files_path)
+        else:
+            bs = None
+        split_ds = load_dataset(files_path, height=h, width=w, batch_size=bs, is_train=train)
 
         # Insert set into dictionary
         sets[split] = split_ds
