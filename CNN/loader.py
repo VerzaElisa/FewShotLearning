@@ -49,7 +49,6 @@ def preprocess_image(file_path, height=164, width=397):
     """
     image = tf.io.read_file(file_path)
     image = tf.image.decode_png(image, channels=3)
-    image = tf.image.rgb_to_grayscale(image)
     image = tf.image.resize(image, [height, width])
     image = tf.cast(image, tf.float32) / 255.0
     return image
