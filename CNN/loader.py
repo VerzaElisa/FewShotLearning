@@ -49,7 +49,6 @@ def preprocess_image(file_path, height=164, width=397):
     """
     image = tf.io.read_file(file_path)
     image = tf.image.decode_png(image, channels=3)
-    image = tf.image.rgb_to_grayscale(image)
     image = tf.image.resize(image, [height, width])
     image = tf.cast(image, tf.float32) / 255.0
     return image
@@ -67,6 +66,7 @@ def load_dataset(img_list, height, width, is_train, batch_size=32):
     Returns:
         tf.data.Dataset: A TensorFlow Dataset object containing the preprocessed and batched images.
     """
+    #simg_list = img_list if len(img_list)<1700 else img_list[:1700]
     labels = [os.path.basename(os.path.dirname(f)) for f in img_list]
     unique_labels = sorted(set(labels))
     label_to_index = {label: index for index, label in enumerate(unique_labels)}
