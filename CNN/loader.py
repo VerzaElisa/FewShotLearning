@@ -66,6 +66,7 @@ def load_dataset(img_list, height, width, is_train, batch_size=32):
     Returns:
         tf.data.Dataset: A TensorFlow Dataset object containing the preprocessed and batched images.
     """
+    #simg_list = img_list if len(img_list)<1700 else img_list[:1700]
     labels = [os.path.basename(os.path.dirname(f)) for f in img_list]
     unique_labels = sorted(set(labels))
     label_to_index = {label: index for index, label in enumerate(unique_labels)}
