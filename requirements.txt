@@ -9,3 +9,4 @@ scipy
 tqdm
 bs4
 seaborn
+librosa
