@@ -6,6 +6,7 @@ from math import floor
 import csv
 import random
 from collections import Counter
+from sklearn.utils.class_weight import compute_class_weight
 
 seed = 2025
 random.seed(seed)
@@ -54,7 +55,7 @@ def preprocess_image(file_path, height=164, width=397):
     image = tf.cast(image, tf.float32) / 255.0
     return image
 
-def load_dataset(img_list, height, width, is_train, max_set, batch_size=32):
+def load_dataset(img_list, height, width, is_train, batch_size=32):
     """
     From a list of image paths, create a dataset with 
     preprocessed and batched images alongside its labels.
@@ -63,52 +64,36 @@ def load_dataset(img_list, height, width, is_train, max_set, batch_size=32):
         height (int): Desired height of the output images.
         width (int): Desired width of the output images.
         is_train (bool): Indicates if the dataset is for training.
-        max_set (int): Maximum number of images to include in the dataset.
         batch_size (int): Size of the batches of data.
     Returns:
         tf.data.Dataset: A TensorFlow Dataset object containing the preprocessed and batched images.
+        dict: A dictionary containing class weights if is_train is True.
     """
     print(f'Loading dataset with {len(img_list)} images...')
+    class_weight_dict = None
 
-
-    class_to_files = {}
-    for f in img_list:
-        label = os.path.basename(os.path.dirname(f))
-        class_to_files.setdefault(label, []).append(f)
-
-    final_img_list = []
-    final_labels = []
-    for label, files in class_to_files.items():
-        files = np.array(files)
-        perm = rng.permutation(len(files))
-        selected = files[perm[:max_set]] if is_train else files
-        final_img_list.extend(selected)
-        final_labels.extend([label] * len(selected))
-
-
-    unique_labels = sorted(set(class_to_files.keys()))
+    labels = [os.path.basename(os.path.dirname(f)) for f in img_list]
+    unique_labels = sorted(set(labels))
     label_to_index = {label: index for index, label in enumerate(unique_labels)}
+    labels = [label_to_index[label] for label in labels]
     if is_train:
         with open(os.path.join(CNN_CACHE_DIR, str(len(unique_labels))+'_label_to_index.csv'), 'w', newline='') as f:
             writer = csv.writer(f)
             writer.writerow(['label', 'index'])
             for label, index in label_to_index.items():
                 writer.writerow([label, index])
+        
+        class_weights = compute_class_weight(class_weight='balanced', classes=unique_labels, y=labels)
+        class_weight_dict = dict(zip(unique_labels, class_weights))
 
-    print(dict(Counter(final_labels)))
-    print(f'tot examples: {len(final_labels)}')
-    numeric_labels = [label_to_index[label] for label in final_labels]
-
-    
-    ds = tf.data.Dataset.from_tensor_slices((final_img_list, numeric_labels))  
+    ds = tf.data.Dataset.from_tensor_slices((img_list, labels))  
 
     ds = ds.map(lambda file_path, label: (preprocess_image(file_path, height, width), label), num_parallel_calls=tf.data.AUTOTUNE)
     ds = ds.shuffle(buffer_size=1000, seed=seed)
 
     if batch_size is not None:
         ds = ds.batch(batch_size).prefetch(tf.data.AUTOTUNE)
-    return ds
-
+    return ds, class_weight_dict 
 
 def get_img_list(data_dir, classes):
     tot_files = []
@@ -141,7 +126,7 @@ def get_split(data_dir, classes, split_perc, h, w, batch_size=32):
 
     # List of all files in the dataset
     dir_list, perm, tot_files = get_img_list(data_dir, classes)
-
+    cw = None
     print("Creating and caching data split...")
     for split in split_perc.keys():
         train = True if split == 'train' else False
@@ -160,10 +145,11 @@ def get_split(data_dir, classes, split_perc, h, w, batch_size=32):
             bs = batch_size if len(files_path) >= batch_size else len(files_path)
         else:
             bs = None
-        split_ds = load_dataset(files_path, height=h, width=w, batch_size=bs, is_train=train, max_set=1700)
+        split_ds, class_weight_dict = load_dataset(files_path, height=h, width=w, batch_size=bs, is_train=train)
 
         # Insert set into dictionary
         sets[split] = split_ds
         print(f"{split} set processed and added to the dictionary.")
-    return sets
+        cw = class_weight_dict if train else cw
+    return sets, cw
         

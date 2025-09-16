@@ -105,7 +105,7 @@ def create_model(w_h, n_classes):
     model.add(tf.keras.layers.Dense(n_classes, activation='softmax', kernel_initializer=initializer))
     return model
 
-def train(train_df, valid_df, patience, cp_path, w_h, n_classes, checkpoint_freq=5):
+def train(train_df, valid_df, patience, cp_path, w_h, n_classes, class_weight_dict, checkpoint_freq=5):
     """
     Train a CNN model using the provided training and validation datasets.
     Args:
@@ -133,10 +133,13 @@ def train(train_df, valid_df, patience, cp_path, w_h, n_classes, checkpoint_freq
     cp_cb = tf.keras.callbacks.ModelCheckpoint(filepath=os.path.join(cp_dir, 'recovery_weights.weights.h5'), save_weights_only=True, save_freq=checkpoint_freq)
     log_cb = ReportCallback(valid_df, output_path=os.path.join(CACHE_DIR, str(n_classes) + '_CNN_metrics.csv'))
     print("training")
+
     history = model.fit(train_df, 
                         epochs=50, 
                         validation_data=valid_df, 
-                        callbacks=[es_cb, cp_cb, log_cb])
+                        callbacks=[es_cb, cp_cb, log_cb],
+                        class_weight=class_weight_dict
+                        )
     print(history.history)
     model.save(os.path.join(CACHE_DIR, str(n_classes) + '_final_model.h5'))
 

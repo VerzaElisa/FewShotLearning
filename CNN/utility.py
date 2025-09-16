@@ -64,7 +64,7 @@ def train_routine(count_df, patience, split_perc, data_dir, w_h, new_classes, to
     n_classes = len(class_list)
     print(f'Total classes found: {n_classes}')
     if to_train:
-        split_ds = get_split(data_dir, class_list, split_perc, w_h[0], w_h[1])
-        train(split_ds['train'], split_ds['val'], patience=patience, cp_path='checkpoints', w_h = (w_h[0], w_h[1]), n_classes=n_classes)
+        split_ds, class_weight_dict = get_split(data_dir, class_list, split_perc, w_h[0], w_h[1])
+        train(split_ds['train'], split_ds['val'], patience=patience, cp_path='checkpoints', w_h = (w_h[0], w_h[1]), n_classes=n_classes, class_weight_dict=class_weight_dict)
         move_data(CNN_CACHE_DIR, MODELS_METRICS_DIR)
     return n_classes
