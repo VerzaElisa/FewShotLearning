@@ -65,7 +65,7 @@ class ReportCallback(tf.keras.callbacks.Callback):
         df = pd.DataFrame([flat_report])
         df.to_csv(self.output_path, mode=mode, header=header, index=False)
         
-def create_model(w_h, n_classes):
+def create_model_off(w_h, n_classes):
     initializer = tf.keras.initializers.GlorotNormal(seed=42)
 
     model = tf.keras.models.Sequential()
@@ -86,6 +86,22 @@ def create_model(w_h, n_classes):
     model.add(tf.keras.layers.Dense(256, activation='relu', kernel_initializer=initializer))
     model.add(tf.keras.layers.BatchNormalization())
     model.add(tf.keras.layers.Dropout(0.5))
+    model.add(tf.keras.layers.Dense(n_classes, activation='softmax', kernel_initializer=initializer))
+    return model
+
+def create_model(w_h, n_classes):
+    initializer = tf.keras.initializers.GlorotNormal(seed=2025)
+    model = tf.keras.Sequential([
+        tf.keras.layers.Input(shape=(w_h[1], w_h[0], 3))
+    ])
+    lb = min(w_h)
+    while floor(lb / 2) >= 1:
+        model.add(tf.keras.layers.Conv2D(filters=64, kernel_size=3, padding='same', kernel_initializer=initializer))
+        model.add(tf.keras.layers.BatchNormalization())
+        model.add(tf.keras.layers.ReLU())
+        model.add(tf.keras.layers.MaxPool2D((2, 2)))
+        lb = lb / 2
+    model.add(tf.keras.layers.Flatten())
     model.add(tf.keras.layers.Dense(n_classes, activation='softmax', kernel_initializer=initializer))
     return model
 
