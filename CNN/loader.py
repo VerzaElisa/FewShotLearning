@@ -5,6 +5,7 @@ import pandas as pd
 from math import floor
 import csv
 import random
+from collections import Counter
 
 seed = 2025
 random.seed(seed)
@@ -53,7 +54,7 @@ def preprocess_image(file_path, height=164, width=397):
     image = tf.cast(image, tf.float32) / 255.0
     return image
 
-def load_dataset(img_list, height, width, is_train, batch_size=32):
+def load_dataset(img_list, height, width, is_train, max_set, batch_size=32):
     """
     From a list of image paths, create a dataset with 
     preprocessed and batched images alongside its labels.
@@ -62,13 +63,30 @@ def load_dataset(img_list, height, width, is_train, batch_size=32):
         height (int): Desired height of the output images.
         width (int): Desired width of the output images.
         is_train (bool): Indicates if the dataset is for training.
+        max_set (int): Maximum number of images to include in the dataset.
         batch_size (int): Size of the batches of data.
     Returns:
         tf.data.Dataset: A TensorFlow Dataset object containing the preprocessed and batched images.
     """
-    #simg_list = img_list if len(img_list)<1700 else img_list[:1700]
-    labels = [os.path.basename(os.path.dirname(f)) for f in img_list]
-    unique_labels = sorted(set(labels))
+    print(f'Loading dataset with {len(img_list)} images...')
+
+
+    class_to_files = {}
+    for f in img_list:
+        label = os.path.basename(os.path.dirname(f))
+        class_to_files.setdefault(label, []).append(f)
+
+    final_img_list = []
+    final_labels = []
+    for label, files in class_to_files.items():
+        files = np.array(files)
+        perm = rng.permutation(len(files))
+        selected = files[perm[:max_set]] if is_train else files
+        final_img_list.extend(selected)
+        final_labels.extend([label] * len(selected))
+
+
+    unique_labels = sorted(set(class_to_files.keys()))
     label_to_index = {label: index for index, label in enumerate(unique_labels)}
     if is_train:
         with open(os.path.join(CNN_CACHE_DIR, str(len(unique_labels))+'_label_to_index.csv'), 'w', newline='') as f:
@@ -77,9 +95,12 @@ def load_dataset(img_list, height, width, is_train, batch_size=32):
             for label, index in label_to_index.items():
                 writer.writerow([label, index])
 
+    print(dict(Counter(final_labels)))
+    print(f'tot examples: {len(final_labels)}')
+    numeric_labels = [label_to_index[label] for label in final_labels]
 
-    labels = [label_to_index[label] for label in labels]
-    ds = tf.data.Dataset.from_tensor_slices((img_list, labels))  
+    
+    ds = tf.data.Dataset.from_tensor_slices((final_img_list, numeric_labels))  
 
     ds = ds.map(lambda file_path, label: (preprocess_image(file_path, height, width), label), num_parallel_calls=tf.data.AUTOTUNE)
     ds = ds.shuffle(buffer_size=1000, seed=seed)
@@ -88,6 +109,21 @@ def load_dataset(img_list, height, width, is_train, batch_size=32):
         ds = ds.batch(batch_size).prefetch(tf.data.AUTOTUNE)
     return ds
 
+
+def get_img_list(data_dir, classes):
+    tot_files = []
+    print("Listing all image files path...")
+    for cls in classes:
+        cls_dir = os.path.join(data_dir, cls)
+        if os.path.exists(cls_dir):
+            curr_files = [os.path.join(cls, f) for f in os.listdir(cls_dir) if f.endswith('.png')]
+            print(f"Found {len(curr_files)} images for class {cls}.")
+            tot_files.extend(curr_files)
+        else:
+            print(f"Directory {cls_dir} does not exist. Skipping class {cls}.")
+    perm = rng.permutation(len(tot_files))
+    dir_list = [os.path.join(data_dir, f) for f in tot_files]
+    return dir_list, perm, tot_files
 
 def get_split(data_dir, classes, split_perc, h, w, batch_size=32):  
     """
@@ -102,19 +138,9 @@ def get_split(data_dir, classes, split_perc, h, w, batch_size=32):
         dict: Dictionary containing training, validation and test sets.
     """
     sets = {}
-    tot_files = []
 
     # List of all files in the dataset
-    print("Listing all image files path...")
-    for cls in classes:
-        cls_dir = os.path.join(data_dir, cls)
-        if os.path.exists(cls_dir):
-            curr_files = [os.path.join(cls, f) for f in os.listdir(cls_dir) if f.endswith('.png')]
-            tot_files.extend(curr_files)
-        else:
-            print(f"Directory {cls_dir} does not exist. Skipping class {cls}.")
-    perm = rng.permutation(len(tot_files))
-    dir_list = [os.path.join(data_dir, f) for f in tot_files]
+    dir_list, perm, tot_files = get_img_list(data_dir, classes)
 
     print("Creating and caching data split...")
     for split in split_perc.keys():
@@ -134,7 +160,7 @@ def get_split(data_dir, classes, split_perc, h, w, batch_size=32):
             bs = batch_size if len(files_path) >= batch_size else len(files_path)
         else:
             bs = None
-        split_ds = load_dataset(files_path, height=h, width=w, batch_size=bs, is_train=train)
+        split_ds = load_dataset(files_path, height=h, width=w, batch_size=bs, is_train=train, max_set=1700)
 
         # Insert set into dictionary
         sets[split] = split_ds
