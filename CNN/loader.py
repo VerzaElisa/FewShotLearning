@@ -70,12 +70,14 @@ def load_dataset(img_list, height, width, is_train, batch_size=32):
         dict: A dictionary containing class weights if is_train is True.
     """
     print(f'Loading dataset with {len(img_list)} images...')
+    img_list = img_list[:1700]
     class_weight_dict = None
 
     labels = [os.path.basename(os.path.dirname(f)) for f in img_list]
     unique_labels = sorted(set(labels))
     label_to_index = {label: index for index, label in enumerate(unique_labels)}
     labels = [label_to_index[label] for label in labels]
+    unique_labels_numeric = np.array([label_to_index[label] for label in unique_labels])
     if is_train:
         with open(os.path.join(CNN_CACHE_DIR, str(len(unique_labels))+'_label_to_index.csv'), 'w', newline='') as f:
             writer = csv.writer(f)
@@ -83,8 +85,8 @@ def load_dataset(img_list, height, width, is_train, batch_size=32):
             for label, index in label_to_index.items():
                 writer.writerow([label, index])
         
-        class_weights = compute_class_weight(class_weight='balanced', classes=unique_labels, y=labels)
-        class_weight_dict = dict(zip(unique_labels, class_weights))
+        class_weights = compute_class_weight(class_weight='balanced', classes=unique_labels_numeric, y=labels)
+        class_weight_dict = dict(zip(unique_labels_numeric, class_weights))
 
     ds = tf.data.Dataset.from_tensor_slices((img_list, labels))  
 
