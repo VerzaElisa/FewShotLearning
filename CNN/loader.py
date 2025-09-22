@@ -80,9 +80,9 @@ def load_dataset(img_list, height, width, is_train, batch_size=32):
     if is_train:
         with open(os.path.join(CNN_CACHE_DIR, str(len(unique_labels))+'_label_to_index.csv'), 'w', newline='') as f:
             writer = csv.writer(f)
-            writer.writerow(['label', 'index'])
+            writer.writerow(['label', 'index', 'file_count'])
             for label, index in label_to_index.items():
-                writer.writerow([label, index])
+                writer.writerow([label, index, labels.count(index)])
         
         class_weights = compute_class_weight(class_weight='balanced', classes=unique_labels_numeric, y=labels)
         class_weight_dict = dict(zip(unique_labels_numeric, class_weights))
@@ -98,17 +98,21 @@ def load_dataset(img_list, height, width, is_train, batch_size=32):
 
 def get_img_list(data_dir, classes):
     tot_files = []
+    dir_list = []
+    perm = []
     print("Listing all image files path...")
     for cls in classes:
         cls_dir = os.path.join(data_dir, cls)
         if os.path.exists(cls_dir):
             curr_files = [os.path.join(cls, f) for f in os.listdir(cls_dir) if f.endswith('.png')]
             print(f"Found {len(curr_files)} images for class {cls}.")
-            tot_files.extend(curr_files)
+            tot_files.append(curr_files)
+            dir_list.append([os.path.join(data_dir, f) for f in curr_files])
+            perm.append(rng.permutation(len(curr_files)))
         else:
             print(f"Directory {cls_dir} does not exist. Skipping class {cls}.")
-    perm = rng.permutation(len(tot_files))
-    dir_list = [os.path.join(data_dir, f) for f in tot_files]
+    
+    
     return dir_list, perm, tot_files
 
 def get_split(data_dir, classes, split_perc, h, w, batch_size=32):  
@@ -133,12 +137,14 @@ def get_split(data_dir, classes, split_perc, h, w, batch_size=32):
         train = True if split == 'train' else False
         if split not in ['train', 'val', 'test']:
             raise ValueError(f"Invalid split: {split}. Must be one of 'train', 'val', or 'test'.")
-        
-        # Get all files for the split based on the split percentage
-        n_elem = floor(len(tot_files) * split_perc[split])
-        split_len = n_elem if n_elem > 0 else 1
-        files_path = [dir_list[i] for i in perm[:split_len]]
-        perm = perm[split_len:]
+        files_path = []
+        # Get all files for the split based on the split percentageù
+        for i, c in enumerate(tot_files):
+            
+            n_elem = floor(len(c) * split_perc[split])
+            split_len = n_elem if n_elem > 0 else 1
+            files_path.extend([dir_list[i][j] for j in perm[i][:split_len]])
+            perm[i] = perm[i][split_len:]
 
         # Apply loading and preprocessing to each element of files list
         print(f"Processing {split} set with {len(files_path)} images...")

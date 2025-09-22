@@ -23,25 +23,28 @@ def move_data(cache_dir, models_metrics_dir):
         os.rename(src_path, dst_path)
     print("Moved cached data to models_metrics directory.")
 
-def create_class_list(count_df, starting_index, n_classes):
+def create_class_list(count_df, starting_index, n_classes, from_start=True):
     """
     Create a list of classes to include in the training.
     Args:
         count_df: DataFrame containing species and their file counts.
         starting_index: Index to start adding new classes from.
         n_classes: Number of classes to add.
+        from_start: If True, start including classes from the beginning of count_df;
+                    otherwise, start from starting_index.
     Returns:
         class_list_plus_n: List of classes including the newly added ones.
     """
     count_df = count_df[count_df['file_count'] > 1]
     sorted_df = count_df.sort_values(by='file_count', ascending=False)
     sorted_labels = sorted_df['species'].tolist()
-    class_list_plus_n = sorted_labels[:starting_index + n_classes]
+    first_class = 0 if from_start else starting_index
+    class_list_plus_n = sorted_labels[first_class:starting_index + n_classes]
     added_classes = sorted_labels[starting_index:starting_index + n_classes]
     print(f'Added classes: {added_classes}')
     return class_list_plus_n
 
-def train_routine(count_df, patience, split_perc, data_dir, w_h, new_classes, to_train, cardinality=None):
+def train_routine(count_df, patience, split_perc, data_dir, w_h, new_classes, to_train, subfloder, from_start=True, cardinality=None):
     """
     Execute the training routine.
     Args:
@@ -60,11 +63,15 @@ def train_routine(count_df, patience, split_perc, data_dir, w_h, new_classes, to
     if cardinality is not None:
         class_list = count_df[count_df['file_count'] >= cardinality]['species'].tolist()
     else:
-        class_list = create_class_list(count_df, new_classes[0], new_classes[1])
+        class_list = create_class_list(count_df, new_classes[0], new_classes[1], from_start=from_start)
     n_classes = len(class_list)
     print(f'Total classes found: {n_classes}')
+    
     if to_train:
         split_ds, class_weight_dict = get_split(data_dir, class_list, split_perc, w_h[0], w_h[1])
         train(split_ds['train'], split_ds['val'], patience=patience, cp_path='checkpoints', w_h = (w_h[0], w_h[1]), n_classes=n_classes, class_weight_dict=class_weight_dict)
-        move_data(CNN_CACHE_DIR, MODELS_METRICS_DIR)
+        dest_folder = os.path.join(MODELS_METRICS_DIR, subfloder)
+        if not os.path.exists(dest_folder):
+            os.makedirs(dest_folder)
+    move_data(CNN_CACHE_DIR, dest_folder)
     return n_classes
