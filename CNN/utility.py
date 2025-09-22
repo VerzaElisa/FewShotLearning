@@ -73,5 +73,5 @@ def train_routine(count_df, patience, split_perc, data_dir, w_h, new_classes, to
         dest_folder = os.path.join(MODELS_METRICS_DIR, subfloder)
         if not os.path.exists(dest_folder):
             os.makedirs(dest_folder)
-    move_data(CNN_CACHE_DIR, dest_folder)
+        move_data(CNN_CACHE_DIR, dest_folder)
     return n_classes
