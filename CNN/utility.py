@@ -66,9 +66,20 @@ def train_routine(count_df, patience, split_perc, data_dir, w_h, new_classes, to
         class_list = create_class_list(count_df, new_classes[0], new_classes[1], from_start=from_start)
     n_classes = len(class_list)
     print(f'Total classes found: {n_classes}')
-    
+
+    tot_files = count_df[count_df['species'].isin(class_list)]['file_count'].sum()
+    tot_train_files = int(tot_files * split_perc['train'])
+    class_weight_dict = {}
+    class_name_to_index = {name: index for index, name in enumerate(class_list)}
+    for cls in class_list:
+        class_num = class_name_to_index[cls]
+        cls_count = count_df[count_df['species'] == cls]['file_count'].values[0]
+        cls_train_count = int(cls_count * split_perc['train'])
+        # same formula used in sklearn.utils.class_weight.compute_class_weight for 'balanced' mode
+        class_weight_dict[class_num] = tot_train_files / (n_classes * cls_train_count)
+
     if to_train:
-        split_ds, class_weight_dict = get_split(data_dir, class_list, split_perc, w_h[0], w_h[1])
+        split_ds = get_split(data_dir, class_list, split_perc, w_h[0], w_h[1])
         train(split_ds['train'], split_ds['val'], patience=patience, cp_path='checkpoints', w_h = (w_h[0], w_h[1]), n_classes=n_classes, class_weight_dict=class_weight_dict)
         dest_folder = os.path.join(MODELS_METRICS_DIR, subfloder)
         if not os.path.exists(dest_folder):
