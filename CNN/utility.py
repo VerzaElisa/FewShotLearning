@@ -85,4 +85,4 @@ def train_routine(count_df, patience, split_perc, data_dir, w_h, new_classes, to
         if not os.path.exists(dest_folder):
             os.makedirs(dest_folder)
         move_data(CNN_CACHE_DIR, dest_folder)
-    return n_classes
+    return n_classes + new_classes[0]
