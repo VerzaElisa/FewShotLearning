@@ -5,6 +5,7 @@ import pandas as pd
 from sklearn.metrics import classification_report
 import tensorflow as tf
 from math import floor
+import keras
 
 
 CACHE_DIR = os.path.join("data_cache", "CNN")
@@ -33,38 +34,70 @@ def setup_gpu():
 
 setup_gpu()
 
+@keras.saving.register_keras_serializable()
+class HandmadeAccuracy(keras.metrics.Metric):
+    def __init__(self, name="accuracy_handmade", **kwargs):
+        super().__init__(name=name, **kwargs)
+        self.correct = self.add_weight(name="correct", initializer="zeros")
+        self.total = self.add_weight(name="total", initializer="zeros")
 
-class ReportCallback(tf.keras.callbacks.Callback):
-    def __init__(self, valid_dataset, output_path="CNN_metrics.csv"):
+    def update_state(self, y_true, y_pred, sample_weight=None):
+        y_pred = tf.argmax(y_pred, axis=1)
+        y_true = tf.cast(tf.reshape(y_true, [-1]), tf.int64)
+
+        matches = tf.cast(tf.equal(y_true, y_pred), tf.float32)
+
+        self.correct.assign_add(tf.reduce_sum(matches))
+        self.total.assign_add(tf.cast(tf.size(y_true), tf.float32))
+
+    def result(self):
+        return {'tp_hm':self.correct, 'total':self.total}
+
+    def reset_state(self):
+        self.correct.assign(0.0)
+        self.total.assign(0.0)
+
+
+
+def calculate_confusion_matrix(y_true, y_pred, num_classes):
+    y_pred = tf.argmax(y_pred, axis=1)
+    y_true = tf.cast(tf.reshape(y_true, [-1]), tf.int32)
+    
+    cm = tf.math.confusion_matrix(
+        y_true,
+        y_pred,
+        num_classes=num_classes,
+        dtype=tf.float32
+    )
+    return cm
+
+class ConfusionMatrixLogger(keras.callbacks.Callback):
+    def __init__(self, validation_dataset, num_classes):
         super().__init__()
-        self.valid_dataset = valid_dataset
-        self.output_path = output_path
-        self.reports = [] 
+        self.validation_dataset = validation_dataset
+        self.num_classes = num_classes
 
     def on_epoch_end(self, epoch, logs=None):
-        preds = self.model.predict(self.valid_dataset, verbose=0)
-        y_true = np.concatenate([y for x, y in self.valid_dataset], axis=0)
-        y_pred = np.argmax(preds, axis=1)
-
-        report_dict = classification_report(y_true, y_pred, output_dict=True, zero_division=0)
-
-
-        flat_report = {"epoch": epoch+1}
-        for label, metrics in report_dict.items():
-            if isinstance(metrics, dict):
-                for m_name, value in metrics.items():
-                    flat_report[f"{label}_{m_name}"] = value
-            else:
-                flat_report[label] = metrics
-
-        self.reports.append(flat_report)
-
-        mode = 'a' if epoch > 0 else 'w'
-        header = False if epoch > 0 else True
+        print(f"\nCalculating confusion matrix for epoch {epoch + 1}")
         
-        df = pd.DataFrame([flat_report])
-        df.to_csv(self.output_path, mode=mode, header=header, index=False)
+        all_y_true = []
+        all_y_pred = []
+
+        for x_batch, y_batch in self.validation_dataset:
+            y_pred_batch = self.model.predict_on_batch(x_batch)
+            
+            all_y_true.append(y_batch)
+            all_y_pred.append(y_pred_batch)
+
+        y_true = tf.concat(all_y_true, axis=0)
+        y_pred = tf.concat(all_y_pred, axis=0)
         
+        cm = calculate_confusion_matrix(y_true, y_pred, self.num_classes)
+        logs['val_confusion_matrix'] = cm.numpy().astype(int)
+        
+        print(f"Validation Confusion Matrix:\n{cm.numpy().astype(int)}")
+
+
 def create_model_off(w_h, n_classes):
     initializer = tf.keras.initializers.GlorotNormal(seed=42)
 
@@ -105,7 +138,7 @@ def create_model(w_h, n_classes):
     model.add(tf.keras.layers.Dense(n_classes, activation='softmax', kernel_initializer=initializer))
     return model
 
-def train(train_df, valid_df, patience, cp_path, w_h, n_classes, checkpoint_freq=5):
+def train(train_df, valid_df, patience, cp_path, w_h, n_classes, class_weight_dict, checkpoint_freq=5):
     """
     Train a CNN model using the provided training and validation datasets.
     Args:
@@ -127,16 +160,22 @@ def train(train_df, valid_df, patience, cp_path, w_h, n_classes, checkpoint_freq
     model.compile(
         loss='sparse_categorical_crossentropy',
         optimizer=tf.keras.optimizers.RMSprop(),
-        metrics=['accuracy'],
+        metrics=['accuracy', HandmadeAccuracy()]
     )
+    print(valid_df)
     es_cb = tf.keras.callbacks.EarlyStopping(monitor="val_accuracy", patience=patience, mode="max", min_delta=0.001, restore_best_weights=True)
     cp_cb = tf.keras.callbacks.ModelCheckpoint(filepath=os.path.join(cp_dir, 'recovery_weights.weights.h5'), save_weights_only=True, save_freq=checkpoint_freq)
-    log_cb = ReportCallback(valid_df, output_path=os.path.join(CACHE_DIR, str(n_classes) + '_CNN_metrics.csv'))
+    logger = tf.keras.callbacks.CSVLogger(os.path.join(CACHE_DIR, str(n_classes) + '_training_log.csv'), append=True)
+    cm_cb = ConfusionMatrixLogger(validation_dataset=valid_df, num_classes=n_classes)
     print("training")
+
     history = model.fit(train_df, 
                         epochs=50, 
                         validation_data=valid_df, 
-                        callbacks=[es_cb, cp_cb, log_cb])
+                        callbacks=[es_cb, cp_cb, cm_cb, logger],
+                        class_weight=class_weight_dict
+                        )
+    
     print(history.history)
     model.save(os.path.join(CACHE_DIR, str(n_classes) + '_final_model.h5'))
 
