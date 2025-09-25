@@ -76,12 +76,6 @@ def preprocessing(full_data: np.array, sample: int, species_dir: dict, file_name
 
         # log scaling
         log_spectrogram = np.log(spectrogram + 1e-10)
-
-        # saving spectrogram numeric data as .npy file
-        if not os.path.exists(species_dir['num']):
-            os.makedirs(species_dir['num'])
-        np.save(os.path.join(species_dir['num'], file_name + "-" + str(chunk_num) + ".npy"), log_spectrogram)
-
         # saving spectrogram image as PNG
         if not os.path.exists(output_file):
             save_chunk({'fig': fig, 'ax': ax}, log_spectrogram, output_file, cmap)
