@@ -6,7 +6,6 @@ from math import floor
 import csv
 import random
 from collections import Counter
-from sklearn.utils.class_weight import compute_class_weight
 
 seed = 2025
 random.seed(seed)
@@ -39,34 +38,132 @@ if not os.path.exists(CNN_CACHE_DIR):
     print(f"Creating CNN data cache directory at {CNN_CACHE_DIR}")
     os.makedirs(CNN_CACHE_DIR)
 
+def preprocess_image(file_path, height=164, width=397):
+    """
+    Load and preprocess an image from a file path.
+    Args:
+        file_path (str): Path to the image file.
+        height (int): Desired height of the output image.
+        width (int): Desired width of the output image.
+    Returns:
+        tf.Tensor: A preprocessed image tensor.
+    """
+    image = tf.io.read_file(file_path)
+    image = tf.image.decode_png(image, channels=3)
+    image = tf.image.resize(image, [height, width])
+    image = tf.cast(image, tf.float32) / 255.0
+    return image
+
+def load_dataset(img_list, height, width, is_train, max_set, batch_size=32):
+    """
+    From a list of image paths, create a dataset with 
+    preprocessed and batched images alongside its labels.
+    Args:
+        img_list (list): List of image file paths.
+        height (int): Desired height of the output images.
+        width (int): Desired width of the output images.
+        is_train (bool): Indicates if the dataset is for training.
+        max_set (int): Maximum number of images to include in the dataset.
+        batch_size (int): Size of the batches of data.
+    Returns:
+        tf.data.Dataset: A TensorFlow Dataset object containing the preprocessed and batched images.
+    """
+    print(f'Loading dataset with {len(img_list)} images...')
+
+
+    class_to_files = {}
+    for f in img_list:
+        label = os.path.basename(os.path.dirname(f))
+        class_to_files.setdefault(label, []).append(f)
+
+    final_img_list = []
+    final_labels = []
+    for label, files in class_to_files.items():
+        files = np.array(files)
+        perm = rng.permutation(len(files))
+        selected = files[perm[:max_set]] if is_train else files
+        final_img_list.extend(selected)
+        final_labels.extend([label] * len(selected))
+
+
+    unique_labels = sorted(set(class_to_files.keys()))
+    label_to_index = {label: index for index, label in enumerate(unique_labels)}
+    if is_train:
+        with open(os.path.join(CNN_CACHE_DIR, str(len(unique_labels))+'_label_to_index.csv'), 'w', newline='') as f:
+            writer = csv.writer(f)
+            writer.writerow(['label', 'index'])
+            for label, index in label_to_index.items():
+                writer.writerow([label, index])
+
+    print(dict(Counter(final_labels)))
+    print(f'tot examples: {len(final_labels)}')
+    numeric_labels = [label_to_index[label] for label in final_labels]
+
+    
+    ds = tf.data.Dataset.from_tensor_slices((final_img_list, numeric_labels))  
+
+    ds = ds.map(lambda file_path, label: (preprocess_image(file_path, height, width), label), num_parallel_calls=tf.data.AUTOTUNE)
+    ds = ds.shuffle(buffer_size=1000, seed=seed)
+
+    if batch_size is not None:
+        ds = ds.batch(batch_size).prefetch(tf.data.AUTOTUNE)
+    return ds
+
+
+def get_img_list(data_dir, classes):
+    tot_files = []
+    print("Listing all image files path...")
+    for cls in classes:
+        cls_dir = os.path.join(data_dir, cls)
+        if os.path.exists(cls_dir):
+            curr_files = [os.path.join(cls, f) for f in os.listdir(cls_dir) if f.endswith('.png')]
+            print(f"Found {len(curr_files)} images for class {cls}.")
+            tot_files.extend(curr_files)
+        else:
+            print(f"Directory {cls_dir} does not exist. Skipping class {cls}.")
+    perm = rng.permutation(len(tot_files))
+    dir_list = [os.path.join(data_dir, f) for f in tot_files]
+    return dir_list, perm, tot_files
+
 def get_split(data_dir, classes, split_perc, h, w, batch_size=32):  
-    train_ds = tf.keras.utils.image_dataset_from_directory(
-        data_dir,
-        validation_split=split_perc['val'], 
-        subset="training", 
-        seed=2025,
-        class_names=classes,
-        image_size=(h, w),
-        batch_size=batch_size
-    )
+    """
+    Get the training, validation and test sets from the dataset.
+    Args:
+        data_dir (str): Path to the full dataset.
+        classes (list): List of class names to be considered.
+        split_perc (dict): Dictionary containing the percentage split for train, val, and test.
+        h (int): Desired height of the output images.
+        w (int): Desired width of the output images.
+    Returns:
+        dict: Dictionary containing training, validation and test sets.
+    """
+    sets = {}
 
-    val_ds = tf.keras.utils.image_dataset_from_directory(
-        data_dir,
-        validation_split=split_perc['val'],
-        subset="validation",
-        seed=2025,
-        class_names=classes,
-        image_size=(h, w),
-        batch_size=batch_size
-    )
-    class_names = pd.DataFrame({'label': train_ds.class_names, 'index': range(len(train_ds.class_names))})
-    class_names.to_csv(os.path.join(CNN_CACHE_DIR, 'label_to_index.csv'), index=False)
-    normalization_layer = tf.keras.layers.Rescaling(1./255)
+    # List of all files in the dataset
+    dir_list, perm, tot_files = get_img_list(data_dir, classes)
 
-    train_ds = train_ds.map(lambda x, y: (normalization_layer(x), y))
-    val_ds   = val_ds.map(lambda x, y: (normalization_layer(x), y))
+    print("Creating and caching data split...")
+    for split in split_perc.keys():
+        train = True if split == 'train' else False
+        if split not in ['train', 'val', 'test']:
+            raise ValueError(f"Invalid split: {split}. Must be one of 'train', 'val', or 'test'.")
+        
+        # Get all files for the split based on the split percentage
+        n_elem = floor(len(tot_files) * split_perc[split])
+        split_len = n_elem if n_elem > 0 else 1
+        files_path = [dir_list[i] for i in perm[:split_len]]
+        perm = perm[split_len:]
 
-    train_ds = train_ds.cache().prefetch(buffer_size=tf.data.AUTOTUNE)
-    val_ds   = val_ds.cache().prefetch(buffer_size=tf.data.AUTOTUNE)
+        # Apply loading and preprocessing to each element of files list
+        print(f"Processing {split} set with {len(files_path)} images...")
+        if batch_size is not None:
+            bs = batch_size if len(files_path) >= batch_size else len(files_path)
+        else:
+            bs = None
+        split_ds = load_dataset(files_path, height=h, width=w, batch_size=bs, is_train=train, max_set=1700)
 
-    return {'train': train_ds, 'val': val_ds}
+        # Insert set into dictionary
+        sets[split] = split_ds
+        print(f"{split} set processed and added to the dictionary.")
+    return sets
+        
