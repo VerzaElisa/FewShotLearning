@@ -40,8 +40,9 @@ class TrainEngine(object):
             for i_episode in range(state['n_episodes']):
                 # Get the next episode's data from the train_loader
                 print(f"Episode {state['total_episode']} started.")
-                support, query = train_loader.get_next_episode()
+                support, query, class_map = train_loader.get_next_episode()
                 state['sample'] = (support, query)
+                state['class_map'] = class_map
 
                 # Execute the forward and backward pass and update the model parameters
                 self.hooks['on_start_episode'](state)

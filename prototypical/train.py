@@ -2,21 +2,35 @@ import os
 import time
 import numpy as np
 import tensorflow as tf
-from model_workflow.train_engine import TrainEngine
+import random
+from prototypical.train_engine import TrainEngine
 
-from protonet.loader import load
-from protonet.prototypical import Prototypical
+from prototypical.loader import load
+from prototypical.prototypical import Prototypical
 
-try:
-    # Con CUDA disabilitato, questa lista sarà sempre vuota
-    gpus = tf.config.list_physical_devices('GPU')
+seed = 2025
+tf.random.set_seed(seed)
+np.random.seed(seed)
+random.seed(seed)
+
+def setup_gpu():
+    gpus = tf.config.experimental.list_physical_devices('GPU')
+    
     if gpus:
-        tf.config.gpu.set_per_process_memory_growth(True)
-        print(f"GPU trovate: {len(gpus)}")
+        try:
+            for gpu in gpus:
+                tf.config.experimental.set_memory_growth(gpu, True)
+            
+            print(f"GPUs found: {len(gpus)}")
+            for i, gpu in enumerate(gpus):
+                print(f"GPU {i}: {gpu}")
+                                
+        except RuntimeError as e:
+            print(f"GPU configuration error: {e}")
     else:
-        print("Utilizzo CPU (CUDA disabilitato)")
-except Exception as e:
-    print(f"Errore nella configurazione: {e}")
+        print("No GPU found, using CPU")
+
+setup_gpu()
 
 
 def train(config, class_split):
@@ -24,12 +38,10 @@ def train(config, class_split):
     Train the Prototypical Network model.
     Args:
         config (dict): Configuration dictionary containing training parameters.
-        class_split (DataFrame): DataFrame containing class names with their corresponding set.
+        class_split (DataFrame): DataFrame containing class names with their corresponding set (columns: class, split).
     """
-    np.random.seed(2019)
-    tf.random.set_seed(2019)
-    print('1. Loading data...')
-    # Creazione cartella per il modello
+ 
+    # Model and metrics directory setup
     model_dir = os.path.join("data_cache", "proto")
     if not os.path.exists(model_dir):
         os.makedirs(model_dir)
@@ -47,16 +59,10 @@ def train(config, class_split):
             f.write(header)
     
     # Creazione del dataset diviso in training e validation
+    print('loading data')
     ret = load(class_split, config, ['train', 'val'])
     train_loader = ret['train']
     val_loader = ret['val']
-
-    # Scelta CPU/GPU
-    if config['data.cuda']:
-        cuda_num = config['data.gpu']
-        device_name = f'GPU:{cuda_num}'
-    else:
-        device_name = 'CPU:0'
 
     # Setup training operations
     n_support = config['data.train_support']
@@ -64,7 +70,7 @@ def train(config, class_split):
     w, h, c = list(map(int, config['model.x_dim'].split(',')))
 
     # Model initialization and optimizer
-    model = Prototypical(n_support, n_query, w, h, c)
+    model = Prototypical(n_support, n_query, w, h, c, )
     optimizer = tf.keras.optimizers.Adam(config['train.lr'])
 
     # Metrics to gather
@@ -207,13 +213,13 @@ def train(config, class_split):
     train_engine.hooks['on_end_episode'] = on_end_episode
 
     time_start = time.time()
-    with tf.device(device_name):
-        train_engine.train(
-            loss_func=loss,
-            train_loader=train_loader,
-            val_loader=val_loader,
-            epochs=config['train.epochs'],
-            n_episodes=config['data.episodes'])
+    print("Starting training...")
+    train_engine.train(
+        loss_func=loss,
+        train_loader=train_loader,
+        val_loader=val_loader,
+        epochs=config['train.epochs'],
+        n_episodes=config['data.episodes'])
     time_end = time.time()
 
     elapsed = time_end - time_start

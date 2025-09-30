@@ -12,37 +12,30 @@ if not os.path.exists(DATA_CACHE_DIR):
 
 
 class DataLoader(object):
-    def __init__(self, data, n_classes, n_way, n_support, n_query):
+    def __init__(self, data, classes, n_way, n_support, n_query, img_dims={'h': 164, 'w': 397, 'c': 3}):
         self.data = data
         self.n_way = n_way
-        self.n_classes = n_classes
+        self.classes = classes
         self.n_support = n_support
         self.n_query = n_query
+        self.h = img_dims['h']
+        self.w = img_dims['w']
+        self.c = img_dims['c']
 
     def get_next_episode(self):
-        h, w, c = 164, 397, 3
-        support = np.zeros([self.n_way, self.n_support, h, w, c], dtype=np.float32)
-        query = np.zeros([self.n_way, self.n_query, h, w, c], dtype=np.float32)
 
-        # Randomly select classes for the episode
-        classes_ep = rng.permutation(self.n_classes)[:self.n_way]
+        # Randomly select classes for the episode, the intersection of episodes's classes may be not empty
+        episode_cls = rng.permutation(self.classes)[:self.n_way]
+        curr_files = self.data[self.data['label'].isin(episode_cls)]
+        
+        support = curr_files.groupby("label", group_keys=False).apply(lambda x: x.sample(n=self.n_support))
+        query = curr_files.drop(support.index).groupby("label", group_keys=False).apply(lambda x: x.sample(n=self.n_query))
 
-        for i, i_class in enumerate(classes_ep):
-            # Randomly select support and query examples from the class (for each class in the episode)
-            curr_subset = self.data[i_class]
-            n_examples = curr_subset.shape[0]
+        label_mapping = {label: idx for idx, label in enumerate(episode_cls)}
+        support["label"] = support["label"].map(label_mapping)
+        query["label"] = query["label"].map(label_mapping)
 
-            selected = rng.permutation(n_examples)[:self.n_support + self.n_query]
-
-            # TODO: gli esempi si support e query non sono abbastanza (per classi con 2 esempi) togli la print risolto il problema
-            print(f"selezionati {len(curr_subset.loc[selected[:self.n_support], 'file'].tolist())} support "
-                  f"e {len(curr_subset.loc[selected[self.n_support:], 'file'].tolist())} query per classe "
-                  f"{curr_subset['label'].unique()}")
-            
-            support[i] = np.stack(curr_subset.loc[selected[:self.n_support], 'file'].tolist())
-            query[i] = np.stack(curr_subset.loc[selected[self.n_support:], 'file'].tolist())
-
-        return support, query
+        return support.reset_index(drop=True), query.reset_index(drop=True), label_mapping
     
 def load_and_preprocess_image(img_path, height=164, width=397):
     """
@@ -62,19 +55,6 @@ def load_and_preprocess_image(img_path, height=164, width=397):
     image = tf.cast(image, tf.float32) / 255.0
     return image.numpy()
 
-def from_df_to_dict(data):
-    """
-    Create a dictionary from data DataFrame with keys as class indexes
-    and values as DataFrame of class name and numpy array of the file.
-    """
-    data_dict = {}
-    for i, class_name in enumerate(data['label'].unique()):
-        class_data = data[data['label'] == class_name].copy()
-        class_data['class_index'] = i
-        class_data = class_data.reset_index(drop=True)
-        class_data.index.name = "sample_id"
-        data_dict[i] = class_data
-    return data_dict
 
 def configuration(config, split, classes):
     """
@@ -88,7 +68,7 @@ def configuration(config, split, classes):
         n_support (int): number of support examples per class.
         n_query (int): number of query examples per class.
         class_names (list): list of all class names.
-        records (list): list of dictionaries with filepath and label of each sample.
+        records (DataFrame): dataframe of filepaths and labels.
     """
     # n_way (number of classes per episode)
     if split in ['val', 'test']:
@@ -108,12 +88,13 @@ def configuration(config, split, classes):
     else:
         n_query = config['data.train_query']
     
-    records = []
+    # Create records DataFrame with complete file paths and labels
+    records = pd.DataFrame(columns=["file", "label"])
     for class_name in classes:
-        for fname in os.listdir(class_name):
-            if fname.endswith('.png'):
-                fpath = os.path.join(class_name, fname)
-                records.append({"file": fpath, "label": class_name})
+        class_files = [os.path.join(class_name, f) for f in os.listdir(class_name) if f.endswith('.png')]
+        class_labels = [os.path.basename(class_name)] * len(class_files)
+        class_records = pd.DataFrame({"file": class_files, "label": class_labels})
+        records = pd.concat([records, class_records], ignore_index=True)
     return n_way, n_support, n_query, records
 
 def load(data_dirs, config, splits):
@@ -132,28 +113,22 @@ def load(data_dirs, config, splits):
     ret = {}
     for split in splits:
         print(f"Loading data for split: {split}")
+
+        # Selection of classes for the split and classes path building
         split_classes = data_dirs[data_dirs['split'] == split]['class']
         split_classes = split_classes.apply(lambda x: os.path.join(config['data.dataset'], x)).tolist()
+
+        # Create records DataFrame with complete file paths and labels
         n_way, n_support, n_query, records = configuration(config, split, split_classes)
-        ds_df_dir = os.path.join(DATA_CACHE_DIR, f"ds_{split}.pkl")
         print(f"Found classes: {split_classes}")
 
-        # DataFrame creation and serialization, if already serialized: loading
-        if not os.path.exists(ds_df_dir):
-            data = pd.DataFrame(records)
-            w, h, c = list(map(int, config['model.x_dim'].split(',')))
-            data['file'] = data['file'].apply(lambda x: load_and_preprocess_image(x, height=h, width=w))
-            data.to_pickle(ds_df_dir)
-            print(f"Data saved to {ds_df_dir}")
-            
-        else:
-            data = pd.read_pickle(ds_df_dir)
-            print(f"Data loaded from {ds_df_dir}")
-        data_dict = from_df_to_dict(data)
-
+        # Load and preprocess images, updating the 'file' column to contain image arrays
+        w, h, _ = list(map(int, config['model.x_dim'].split(',')))
+        records['file'] = records['file'].apply(lambda x, height=h, width=w: load_and_preprocess_image(x, height=height, width=width))
+   
         # Create DataLoader instance
-        data_loader = DataLoader(data_dict,
-                                 n_classes=len(split_classes),
+        data_loader = DataLoader(records,
+                                 classes=split_classes,
                                  n_way=n_way,
                                  n_support=n_support,
                                  n_query=n_query)

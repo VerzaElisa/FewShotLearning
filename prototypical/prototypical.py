@@ -1,5 +1,6 @@
 import numpy as np
 import tensorflow as tf
+from math import floor
 from tensorflow.keras.layers import Dense, Flatten, Conv2D
 from tensorflow.keras import Model
 from tensorflow.keras.models import load_model
@@ -39,28 +40,18 @@ class Prototypical(Model):
         super(Prototypical, self).__init__()
         self.w, self.h, self.c = w, h, c
 
-        # Encoder as ResNet like CNN with 4 blocks
+        initializer = tf.keras.initializers.GlorotNormal(seed=2025)
         self.encoder = tf.keras.Sequential([
-            tf.keras.layers.Conv2D(filters=64, kernel_size=3, padding='same'),
-            tf.keras.layers.BatchNormalization(),
-            tf.keras.layers.ReLU(),
-            tf.keras.layers.MaxPool2D((2, 2)),
-
-            tf.keras.layers.Conv2D(filters=64, kernel_size=3, padding='same'),
-            tf.keras.layers.BatchNormalization(),
-            tf.keras.layers.ReLU(),
-            tf.keras.layers.MaxPool2D((2, 2)),
-
-            tf.keras.layers.Conv2D(filters=64, kernel_size=3, padding='same'),
-            tf.keras.layers.BatchNormalization(),
-            tf.keras.layers.ReLU(),
-            tf.keras.layers.MaxPool2D((2, 2)),
-
-            tf.keras.layers.Conv2D(filters=64, kernel_size=3, padding='same'),
-            tf.keras.layers.BatchNormalization(),
-            tf.keras.layers.ReLU(),
-            tf.keras.layers.MaxPool2D((2, 2)), Flatten()]
-        )
+            tf.keras.layers.Input(shape=(self.w, self.h, self.c))
+        ])
+        lb = min(self.w, self.h)
+        while floor(lb / 2) >= 1:
+            self.encoder.add(tf.keras.layers.Conv2D(filters=64, kernel_size=3, padding='same', kernel_initializer=initializer))
+            self.encoder.add(tf.keras.layers.BatchNormalization())
+            self.encoder.add(tf.keras.layers.ReLU())
+            self.encoder.add(tf.keras.layers.MaxPool2D((2, 2)))
+            lb = lb / 2
+        
     def metrics(self, log_p_y, y, n_class):
         metrics_dict = {}
 
@@ -108,30 +99,17 @@ class Prototypical(Model):
         return metrics_dict
     
     def call(self, support, query):
-        n_class = support.shape[0]
-        n_support = support.shape[1]
-        n_query = query.shape[1]
-        y = np.tile(np.arange(n_class)[:, np.newaxis], (1, n_query))
-        y_onehot = tf.cast(tf.one_hot(y, n_class), tf.float32)
+        n_class = support['labels'].nunique()
+        n_support = support['label'].value_counts().iloc[0]
+        n_query = query['label'].value_counts().iloc[0]
 
-        # correct indices of support samples (just natural order)
-        target_inds = tf.reshape(tf.range(n_class), [n_class, 1])
-        target_inds = tf.tile(target_inds, [1, n_query])
+        y = query['label'].values
+        y_onehot = tf.one_hot(y, depth=n_class, dtype=tf.float32)
 
-        # merge support and query to forward through encoder
-        cat = tf.concat([
-            tf.reshape(support, [n_class * n_support,
-                                 self.w, self.h, self.c]),
-            tf.reshape(query, [n_class * n_query,
-                               self.w, self.h, self.c])], axis=0)
-        z = self.encoder(cat)
-
-        # Divide embedding into support and query
-        z_prototypes = tf.reshape(z[:n_class * n_support],
-                                  [n_class, n_support, z.shape[-1]])
-        # Prototypes are means of n_support examples
+        z_prototypes = self.encoder(support['file'])
+        z_prototypes = tf.reshape(z_prototypes, (n_class, n_support, -1))
         z_prototypes = tf.math.reduce_mean(z_prototypes, axis=1)
-        z_query = z[n_class * n_support:]
+        z_query = self.encoder(query['file'])
 
         # Calculate distances between query and prototypes
         dists = calc_euclidian_dists(z_query, z_prototypes)
