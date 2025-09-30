@@ -28,17 +28,23 @@ class Prototypical(Model):
     """
     Implemenation of Prototypical Network.
     """
-    def __init__(self, n_support, n_query, w, h, c):
+    def __init__(self, n_support, n_query, n_test_class, n_train_class, w, h, c):
         """
         Args:
             n_support (int): number of support examples.
             n_query (int): number of query examples.
+            n_test_class (int): number of test classes.
+            n_train_class (int): number of training classes.
             w (int): image width .
             h (int): image height.
             c (int): number of channels.
         """
         super(Prototypical, self).__init__()
         self.w, self.h, self.c = w, h, c
+        self.n_support = n_support
+        self.n_query = n_query
+        self.n_test_class = n_test_class
+        self.n_train_class = n_train_class
 
         initializer = tf.keras.initializers.GlorotNormal(seed=2025)
         self.encoder = tf.keras.Sequential([
@@ -98,28 +104,27 @@ class Prototypical(Model):
                                                             tf.reduce_sum(tf.stack(fn_list)) + 1e-8)
         return metrics_dict
     
-    def call(self, support, query):
-        n_class = support['labels'].nunique()
-        n_support = support['label'].value_counts().iloc[0]
-        n_query = query['label'].value_counts().iloc[0]
-
-        y = query['label'].values
-        y_onehot = tf.one_hot(y, depth=n_class, dtype=tf.float32)
-
-        z_prototypes = self.encoder(support['file'])
-        z_prototypes = tf.reshape(z_prototypes, (n_class, n_support, -1))
+    def call(self, s_files, s_label, q_files, q_label):
+        print(f'support shape: {s_files.shape}, query shape: {q_files.shape}')
+ 
+        y = q_label
+        y_onehot = tf.one_hot(y, depth=self.n_test_class, dtype=tf.float32)
+        
+        z_prototypes = self.encoder(s_files)
+        z_prototypes = tf.reshape(z_prototypes, (self.n_train_class, self.n_support, -1))
         z_prototypes = tf.math.reduce_mean(z_prototypes, axis=1)
-        z_query = self.encoder(query['file'])
+
+        z_query = self.encoder(q_files)
 
         # Calculate distances between query and prototypes
         dists = calc_euclidian_dists(z_query, z_prototypes)
 
         # log softmax of calculated distances
         log_p_y = tf.nn.log_softmax(-dists, axis=-1)
-        log_p_y = tf.reshape(log_p_y, [n_class, n_query, -1])
+        log_p_y = tf.reshape(log_p_y, [self.n_test_class, self.n_query, -1])
         
         loss = -tf.reduce_mean(tf.reshape(tf.reduce_sum(tf.multiply(y_onehot, log_p_y), axis=-1), [-1]))
-        metrics = self.metrics(log_p_y, y, n_class)
+        metrics = self.metrics(log_p_y, y, self.n_test_class)
         return loss, metrics
 
     def save(self, model_path):

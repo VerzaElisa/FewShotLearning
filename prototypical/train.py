@@ -63,14 +63,14 @@ def train(config, class_split):
     ret = load(class_split, config, ['train', 'val'])
     train_loader = ret['train']
     val_loader = ret['val']
-
+    print('data loaded')
     # Setup training operations
     n_support = config['data.train_support']
     n_query = config['data.train_query']
     w, h, c = list(map(int, config['model.x_dim'].split(',')))
 
     # Model initialization and optimizer
-    model = Prototypical(n_support, n_query, w, h, c, )
+    model = Prototypical(n_support, n_query, config['data.train_way'], config['data.test_way'], w, h, c, )
     optimizer = tf.keras.optimizers.Adam(config['train.lr'])
 
     # Metrics to gather
@@ -97,10 +97,11 @@ def train(config, class_split):
         return loss, acc
 
     @tf.function
-    def train_step(model, support, query):
+    def train_step(model, s_files, s_label, q_files, q_label):
+        print(type(s_files))
         with tf.GradientTape() as tape:
             # Forward pass
-            loss, metrics = model(support, query)
+            loss, metrics = model(s_files, s_label, q_files, q_label)
 
         # Backward pass: returns a list of gradients for each trainable variable
         gradients = tape.gradient(loss, model.trainable_variables)
@@ -194,8 +195,17 @@ def train(config, class_split):
     # the forward and backward pass and updates the model parameters.
     def on_start_episode(state):
         
-        support, query = state['sample']
-        train_step(model, support, query)
+        support, query = state['sample'] 
+        support_images =  support['file'].values
+        support_stacked_images = np.stack(support_images)
+        support_files = tf.convert_to_tensor(support_stacked_images)
+        support_labels = tf.convert_to_tensor(support["label"].values, dtype=tf.int32)
+        query_images = query['file'].values
+        query_stacked_images = np.stack(query_images)
+
+        query_files = tf.convert_to_tensor(query_stacked_images)
+        query_labels = tf.convert_to_tensor(query["label"].values, dtype=tf.int32)
+        train_step(model, support_files, support_labels, query_files, query_labels)
     train_engine.hooks['on_start_episode'] = on_start_episode
 
     def on_end_episode(state):
@@ -208,7 +218,7 @@ def train(config, class_split):
         # TODO: alla fine di ogni episodio fa validazione n volte con n numero di episodi,
         # serve farlo? o andrebbe fatta validazione alla fine di ogni epoca?
         for _ in range(config['data.episodes']):
-            support, query = val_loader.get_next_episode()
+            support, query, _ = val_loader.get_next_episode()
             val_step(loss_func, support, query)
     train_engine.hooks['on_end_episode'] = on_end_episode
 

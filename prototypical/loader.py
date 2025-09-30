@@ -26,14 +26,20 @@ class DataLoader(object):
 
         # Randomly select classes for the episode, the intersection of episodes's classes may be not empty
         episode_cls = rng.permutation(self.classes)[:self.n_way]
-        curr_files = self.data[self.data['label'].isin(episode_cls)]
-        
+        episode_cls_list = [cls.split('/')[-1] for cls in episode_cls]
+        curr_files = self.data[self.data['label'].isin(episode_cls_list)]
+        print(f'episode classes: {episode_cls_list}, file len {curr_files.shape}')
+
         support = curr_files.groupby("label", group_keys=False).apply(lambda x: x.sample(n=self.n_support))
         query = curr_files.drop(support.index).groupby("label", group_keys=False).apply(lambda x: x.sample(n=self.n_query))
+        print(f'train support len {support.shape[0]}, train query len {query.shape[0]}')
 
-        label_mapping = {label: idx for idx, label in enumerate(episode_cls)}
+        label_mapping = {label: idx for idx, label in enumerate(episode_cls_list)}
         support["label"] = support["label"].map(label_mapping)
         query["label"] = query["label"].map(label_mapping)
+ 
+        support["file"] = support["file"].apply(lambda x, height=self.h, width=self.w: load_and_preprocess_image(x, height=height, width=width))
+        query["file"] = query["file"].apply(lambda x, height=self.h, width=self.w: load_and_preprocess_image(x, height=height, width=width))
 
         return support.reset_index(drop=True), query.reset_index(drop=True), label_mapping
     
@@ -124,9 +130,10 @@ def load(data_dirs, config, splits):
 
         # Load and preprocess images, updating the 'file' column to contain image arrays
         w, h, _ = list(map(int, config['model.x_dim'].split(',')))
-        records['file'] = records['file'].apply(lambda x, height=h, width=w: load_and_preprocess_image(x, height=height, width=width))
+        #records['file'] = records['file'].apply(lambda x, height=h, width=w: load_and_preprocess_image(x, height=height, width=width))
    
         # Create DataLoader instance
+        print(f"Creating DataLoader for split: {split} with {records.shape} samples.")
         data_loader = DataLoader(records,
                                  classes=split_classes,
                                  n_way=n_way,

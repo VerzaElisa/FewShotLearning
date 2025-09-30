@@ -39,8 +39,8 @@ class TrainEngine(object):
 
             for i_episode in range(state['n_episodes']):
                 # Get the next episode's data from the train_loader
-                print(f"Episode {state['total_episode']} started.")
                 support, query, class_map = train_loader.get_next_episode()
+
                 state['sample'] = (support, query)
                 state['class_map'] = class_map
 
