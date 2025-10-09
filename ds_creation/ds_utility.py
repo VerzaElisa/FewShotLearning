@@ -131,7 +131,8 @@ def get_other_class(ds_dir, species_list):
                 dst_file = os.path.join(other_dir, file)
                 if os.path.isfile(src_file):
                     try:
-                        os.symlink(src_file, dst_file)
+                        relative_src = os.path.relpath(src_file, other_dir)
+                        os.symlink(relative_src, dst_file)
                     except FileExistsError:
                         continue
                     except Exception as e:
@@ -151,6 +152,13 @@ def get_file_count(ds_dir):
         species_name = os.path.basename(subfolder)
         if species_name.startswith('.'):
             continue
+        if ' ' in species_name:
+            print(f'Renaming folder {species_name} to replace spaces with underscores.')
+            new_name = species_name.replace(' ', '_')
+            new_path = os.path.join(ds_dir, new_name)
+            os.rename(subfolder, new_path)
+            subfolder = new_path
+            species_name = new_name
         file_count = len([f for f in os.listdir(subfolder)])
         data_info[species_name] = file_count
     count_df = pd.DataFrame(list(data_info.items()), columns=['species', 'file_count'])

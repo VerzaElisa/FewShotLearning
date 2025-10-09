@@ -47,7 +47,8 @@ def get_split(data_dir, classes, split_perc, h, w, batch_size=32):
         seed=2025,
         class_names=classes,
         image_size=(h, w),
-        batch_size=batch_size
+        batch_size=batch_size,
+        follow_links=True
     )
 
     val_ds = tf.keras.utils.image_dataset_from_directory(
@@ -57,7 +58,8 @@ def get_split(data_dir, classes, split_perc, h, w, batch_size=32):
         seed=2025,
         class_names=classes,
         image_size=(h, w),
-        batch_size=batch_size
+        batch_size=batch_size,
+        follow_links=True
     )
     class_names = pd.DataFrame({'label': train_ds.class_names, 'index': range(len(train_ds.class_names))})
     class_names.to_csv(os.path.join(CNN_CACHE_DIR, 'label_to_index.csv'), index=False)
