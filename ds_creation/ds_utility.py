@@ -3,6 +3,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib
 import soundfile as sf
+import pandas as pd
 from soundfile import LibsndfileError
 from scipy import signal
 
@@ -109,3 +110,49 @@ def species_spec(dirs, species_list, output_dir, ds_path, stf_config, chunk_conf
             
             i += 1
         j += 1
+
+def get_other_class(ds_dir, species_list):
+    """
+    Create a directory for an 'other' class and populate it with data from species in the provided list.
+    WARNING: This function move files.
+    Args:
+        ds_dir (str): Base directory of the dataset and where the 'other' class directory will be created.
+        species_list (list): List of species names to include in the 'other' class.
+    """
+    other_dir = os.path.join(ds_dir, 'other')
+    if not os.path.exists(other_dir):
+        os.makedirs(other_dir)
+    
+    for spec in species_list:
+        species_path = os.path.join(ds_dir, spec)
+        if os.path.exists(species_path) and os.path.isdir(species_path):
+            for file in os.listdir(species_path):
+                src_file = os.path.join(species_path, file)
+                dst_file = os.path.join(other_dir, file)
+                if os.path.isfile(src_file):
+                    try:
+                        os.symlink(src_file, dst_file)
+                    except FileExistsError:
+                        continue
+                    except Exception as e:
+                        print(f"Error creating symlink for {src_file}: {e}")
+
+def get_file_count(ds_dir):
+    """
+    Count the number of files in each species directory within the dataset directory.
+    Args:
+        ds_dir (str): Base directory of the dataset.
+    Returns:
+        count_df: DataFrame containing species and their file counts.
+    """
+    subfolders = [f.path for f in os.scandir(ds_dir) if f.is_dir()]
+    data_info = {}
+    for subfolder in subfolders:
+        species_name = os.path.basename(subfolder)
+        if species_name.startswith('.'):
+            continue
+        file_count = len([f for f in os.listdir(subfolder)])
+        data_info[species_name] = file_count
+    count_df = pd.DataFrame(list(data_info.items()), columns=['species', 'file_count'])
+    count_df = count_df.sort_values(by='file_count', ascending=False)
+    return count_df
