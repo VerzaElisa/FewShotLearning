@@ -220,7 +220,6 @@ def process_metrics(count_df, n_classes, training_path, metrics_dir):
     all_classes_df = pd.read_csv(os.path.join(training_path, f'{n_classes}_training_log.csv'))
     label_df = pd.read_csv(os.path.join(training_path, 'label_to_index.csv'))
     label_df = label_df.merge(count_df, left_on='label', right_on='species', how='left', validate='one_to_one', suffixes=('_training', '_total')).drop(columns=['species'])
-
     best_weights = all_classes_df[all_classes_df['val_accuracy'] == all_classes_df['val_accuracy'].max()]
     best_epoch = best_weights['epoch'].values[0]
     cm = best_weights['val_confusion_matrix']
@@ -242,9 +241,9 @@ def process_metrics(count_df, n_classes, training_path, metrics_dir):
     metrics_plot_builder(metrics_df)
     confusion_matrix_plot(cm_matrix, metrics_df['label'].tolist())
 
-    tsne_df = pd.read_csv(os.path.join(metrics_dir, 'tsne_data.csv'))
-    tsne_df = tsne_df[tsne_df['Targets'].isin(label_df['label'].tolist())]
-    tsne_plot(tsne_df)
+    #tsne_df = pd.read_csv(os.path.join(metrics_dir, 'tsne_data.csv'))
+    #tsne_df = tsne_df[tsne_df['Targets'].isin(label_df['label'].tolist())]
+    #tsne_plot(tsne_df)
 
     check_training_accuracy(all_classes_df['accuracy'].tolist(), all_classes_df['val_accuracy'].tolist(), best_epoch)
     

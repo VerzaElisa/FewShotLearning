@@ -3,6 +3,7 @@ import tensorflow as tf
 from tensorflow.keras.layers import Dense, Flatten, Conv2D
 from tensorflow.keras import Model
 from tensorflow.keras.models import load_model
+from math import floor
 
 
 def calc_euclidian_dists(x, y):
@@ -39,28 +40,17 @@ class Prototypical(Model):
         super(Prototypical, self).__init__()
         self.w, self.h, self.c = w, h, c
 
-        # Encoder as ResNet like CNN with 4 blocks
-        self.encoder = tf.keras.Sequential([
-            tf.keras.layers.Conv2D(filters=64, kernel_size=3, padding='same'),
-            tf.keras.layers.BatchNormalization(),
-            tf.keras.layers.ReLU(),
-            tf.keras.layers.MaxPool2D((2, 2)),
+        initializer = tf.keras.initializers.GlorotNormal(seed=2025)
+        self.encoder = tf.keras.Sequential([tf.keras.layers.Input(shape=(w, h, c))])
+        lb = min((h, w))
+        while floor(lb / 2) >= 1:
+            self.encoder.add(tf.keras.layers.Conv2D(filters=32, kernel_size=3, padding='same', kernel_initializer=initializer))
+            self.encoder.add(tf.keras.layers.BatchNormalization())
+            self.encoder.add(tf.keras.layers.ReLU())
+            self.encoder.add(tf.keras.layers.MaxPool2D((2, 2)))
+            lb = lb / 2
+        self.encoder.add(tf.keras.layers.Flatten())
 
-            tf.keras.layers.Conv2D(filters=64, kernel_size=3, padding='same'),
-            tf.keras.layers.BatchNormalization(),
-            tf.keras.layers.ReLU(),
-            tf.keras.layers.MaxPool2D((2, 2)),
-
-            tf.keras.layers.Conv2D(filters=64, kernel_size=3, padding='same'),
-            tf.keras.layers.BatchNormalization(),
-            tf.keras.layers.ReLU(),
-            tf.keras.layers.MaxPool2D((2, 2)),
-
-            tf.keras.layers.Conv2D(filters=64, kernel_size=3, padding='same'),
-            tf.keras.layers.BatchNormalization(),
-            tf.keras.layers.ReLU(),
-            tf.keras.layers.MaxPool2D((2, 2)), Flatten()]
-        )
 
     def call(self, support, query):
         n_class = support.shape[0]

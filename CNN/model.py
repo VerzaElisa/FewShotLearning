@@ -172,7 +172,7 @@ def train(train_df, valid_df, patience, cp_path, w_h, n_classes, class_weight_di
                         )
     
     print(history.history)
-    model.save(os.path.join(CACHE_DIR, str(n_classes) + '_final_model.h5'))
+    model.save(os.path.join(CACHE_DIR, str(n_classes) + '_final_model.keras'))
     return history
 
 

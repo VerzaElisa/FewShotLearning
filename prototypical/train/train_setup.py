@@ -98,28 +98,29 @@ def train(config):
         epoch = state['epoch']
         template = 'Epoch {}, Loss: {}, Accuracy: {}, ' \
                    'Val Loss: {}, Val Accuracy: {}'
-        print(
-            template.format(epoch + 1, train_loss.result(), train_acc.result() * 100,
-                            val_loss.result(),
-                            val_acc.result() * 100))
+        print(template.format(epoch + 1, train_loss.result(), train_acc.result() * 100,
+                            val_loss.result(), val_acc.result() * 100))
 
         cur_loss = val_loss.result().numpy()
-        if cur_loss < state['best_val_loss']:
-            print("Saving new best model with loss: ", cur_loss)
-            state['best_val_loss'] = cur_loss
-            model.save(config['model.save_path'])
         val_losses.append(cur_loss)
 
-        # Early stopping
         patience = config['train.patience']
-        if len(val_losses) > patience \
-                and max(val_losses[-patience:]) == val_losses[-1]:
+
+        # Early stopping tracking
+        if cur_loss < state['best_val_loss']:
+            print("Saving new best model with loss:", cur_loss)
+            state['best_val_loss'] = cur_loss
+            state['no_improve_epochs'] = 0  # reset patience counter
+            model.save(config['model.save_path'])
+        else:
+            state['no_improve_epochs'] += 1
+
+        if state['no_improve_epochs'] >= patience:
+            print(f"No improvement for {patience} epochs. Early stopping triggered.")
             state['early_stopping_triggered'] = True
     train_engine.hooks['on_end_epoch'] = on_end_epoch
 
     def on_start_episode(state):
-        if state['total_episode'] % 2 == 0:
-            print(f"Episode {state['total_episode']}")
         support, query = state['sample']
         train_step(state['model'], support, query)
     train_engine.hooks['on_start_episode'] = on_start_episode
