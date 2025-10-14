@@ -5,6 +5,8 @@ from CNN.model import train
 CNN_CACHE_DIR = os.path.join("data_cache", "CNN")
 MODELS_METRICS_DIR = os.path.join("models_metrics")
 
+
+
 def move_data(cache_dir, models_metrics_dir):
     """
     Move cached data from the cache directory to the models_metrics directory.
@@ -44,7 +46,7 @@ def create_class_list(count_df, starting_index, n_classes, from_start=True):
     print(f'Added classes: {added_classes}')
     return class_list_plus_n
 
-def train_routine(count_df, patience, split_perc, data_dir, w_h, new_classes, to_train, subfloder, from_start=True, cardinality=None):
+def train_routine(count_df, patience, split_perc, data_dir, w_h, new_classes, to_train, subfolder, from_start=True, cardinality=None):
     """
     Execute the training routine.
     Args:
@@ -58,6 +60,8 @@ def train_routine(count_df, patience, split_perc, data_dir, w_h, new_classes, to
         cardinality: If specified, filter classes by minimum number of samples.
     Returns:
         n_classes: Total number of classes used in training.
+        history: Training history object.
+        
     """
 
     if cardinality is not None:
@@ -80,9 +84,9 @@ def train_routine(count_df, patience, split_perc, data_dir, w_h, new_classes, to
         class_weight_dict[class_num] = tot_train_files / (n_classes * cls_train_count)
     split_ds = get_split(data_dir, class_list, split_perc, w_h[0], w_h[1])
     if to_train:
-        train(split_ds['train'], split_ds['val'], patience=patience, cp_path='checkpoints', w_h = (w_h[0], w_h[1]), n_classes=n_classes, class_weight_dict=class_weight_dict)
-        dest_folder = os.path.join(MODELS_METRICS_DIR, subfloder)
+        history = train(split_ds['train'], split_ds['val'], patience=patience, cp_path='checkpoints', w_h = (w_h[0], w_h[1]), n_classes=n_classes, class_weight_dict=class_weight_dict)
+        dest_folder = os.path.join(MODELS_METRICS_DIR, subfolder)
         if not os.path.exists(dest_folder):
             os.makedirs(dest_folder)
         move_data(CNN_CACHE_DIR, dest_folder)
-    return n_classes + new_classes[0]
+    return n_classes + new_classes[0], history if to_train else None

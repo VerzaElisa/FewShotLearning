@@ -77,9 +77,7 @@ class ConfusionMatrixLogger(keras.callbacks.Callback):
         self.validation_dataset = validation_dataset
         self.num_classes = num_classes
 
-    def on_epoch_end(self, epoch, logs=None):
-        print(f"\nCalculating confusion matrix for epoch {epoch + 1}")
-        
+    def on_epoch_end(self, epoch, logs=None):        
         all_y_true = []
         all_y_pred = []
 
@@ -94,8 +92,6 @@ class ConfusionMatrixLogger(keras.callbacks.Callback):
         
         cm = calculate_confusion_matrix(y_true, y_pred, self.num_classes)
         logs['val_confusion_matrix'] = cm.numpy().astype(int)
-        
-        print(f"Validation Confusion Matrix:\n{cm.numpy().astype(int)}")
 
 
 def create_model_off(w_h, n_classes):
@@ -129,7 +125,7 @@ def create_model(w_h, n_classes):
     ])
     lb = min(w_h)
     while floor(lb / 2) >= 1:
-        model.add(tf.keras.layers.Conv2D(filters=64, kernel_size=3, padding='same', kernel_initializer=initializer))
+        model.add(tf.keras.layers.Conv2D(filters=32, kernel_size=3, padding='same', kernel_initializer=initializer))
         model.add(tf.keras.layers.BatchNormalization())
         model.add(tf.keras.layers.ReLU())
         model.add(tf.keras.layers.MaxPool2D((2, 2)))
@@ -162,7 +158,6 @@ def train(train_df, valid_df, patience, cp_path, w_h, n_classes, class_weight_di
         optimizer=tf.keras.optimizers.RMSprop(),
         metrics=['accuracy', HandmadeAccuracy()]
     )
-    print(valid_df)
     es_cb = tf.keras.callbacks.EarlyStopping(monitor="val_accuracy", patience=patience, mode="max", min_delta=0.001, restore_best_weights=True)
     cp_cb = tf.keras.callbacks.ModelCheckpoint(filepath=os.path.join(cp_dir, 'recovery_weights.weights.h5'), save_weights_only=True, save_freq=checkpoint_freq)
     logger = tf.keras.callbacks.CSVLogger(os.path.join(CACHE_DIR, str(n_classes) + '_training_log.csv'), append=True)
@@ -172,11 +167,12 @@ def train(train_df, valid_df, patience, cp_path, w_h, n_classes, class_weight_di
     history = model.fit(train_df, 
                         epochs=50, 
                         validation_data=valid_df, 
-                        callbacks=[es_cb, cp_cb, cm_cb, logger],
+                        callbacks=[es_cb, cm_cb, logger],
                         class_weight=class_weight_dict
                         )
     
     print(history.history)
     model.save(os.path.join(CACHE_DIR, str(n_classes) + '_final_model.h5'))
+    return history
 
 

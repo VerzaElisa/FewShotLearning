@@ -39,7 +39,7 @@ if not os.path.exists(CNN_CACHE_DIR):
     print(f"Creating CNN data cache directory at {CNN_CACHE_DIR}")
     os.makedirs(CNN_CACHE_DIR)
 
-def get_split(data_dir, classes, split_perc, h, w, batch_size=32):  
+def get_split(data_dir, classes, split_perc, h, w, batch_size=16):  
     train_ds = tf.keras.utils.image_dataset_from_directory(
         data_dir,
         validation_split=split_perc['val'], 
@@ -68,7 +68,7 @@ def get_split(data_dir, classes, split_perc, h, w, batch_size=32):
     train_ds = train_ds.map(lambda x, y: (normalization_layer(x), y))
     val_ds   = val_ds.map(lambda x, y: (normalization_layer(x), y))
 
-    train_ds = train_ds.cache().prefetch(buffer_size=tf.data.AUTOTUNE)
-    val_ds   = val_ds.cache().prefetch(buffer_size=tf.data.AUTOTUNE)
+    train_ds = train_ds.prefetch(buffer_size=tf.data.AUTOTUNE)
+    val_ds   = val_ds.prefetch(buffer_size=tf.data.AUTOTUNE)
 
     return {'train': train_ds, 'val': val_ds}
