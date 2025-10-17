@@ -47,7 +47,7 @@ def train(config):
     val_loss = tf.metrics.Mean(name='val_loss')
     train_acc = tf.metrics.Mean(name='train_accuracy')
     val_acc = tf.metrics.Mean(name='val_accuracy')
-    val_losses = []
+    val_acc_list = []
 
     @tf.function
     def loss(model, support, query):
@@ -98,18 +98,18 @@ def train(config):
         epoch = state['epoch']
         template = 'Epoch {}, Loss: {}, Accuracy: {}, ' \
                    'Val Loss: {}, Val Accuracy: {}'
-        print(template.format(epoch + 1, train_loss.result(), train_acc.result() * 100,
-                            val_loss.result(), val_acc.result() * 100))
+        print(template.format(epoch + 1, train_loss.result(), train_acc.result(),
+                            val_loss.result(), val_acc.result()))
 
-        cur_loss = val_loss.result().numpy()
-        val_losses.append(cur_loss)
+        cur_acc = val_acc.result().numpy()
+        val_acc_list.append(cur_acc)
 
         patience = config['train.patience']
 
         # Early stopping tracking
-        if cur_loss < state['best_val_loss']:
-            print("Saving new best model with loss:", cur_loss)
-            state['best_val_loss'] = cur_loss
+        if cur_acc > state['best_val_acc']:
+            print("Saving new best model with accuracy:", cur_acc)
+            state['best_val_acc'] = cur_acc
             state['no_improve_epochs'] = 0  # reset patience counter
             model.save(config['model.save_path'])
         else:

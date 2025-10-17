@@ -26,7 +26,7 @@ class TrainEngine(object):
             'total_episode': 1,
             'epochs': epochs,
             'n_episodes': n_episodes,
-            'best_val_loss': np.inf,
+            'best_val_acc': 0,
             'early_stopping_triggered': False,
             'model': model
         }
