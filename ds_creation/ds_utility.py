@@ -114,7 +114,6 @@ def species_spec(dirs, species_list, output_dir, ds_path, stf_config, chunk_conf
 def get_other_class(ds_dir, species_list):
     """
     Create a directory for an 'other' class and populate it with data from species in the provided list.
-    WARNING: This function move files.
     Args:
         ds_dir (str): Base directory of the dataset and where the 'other' class directory will be created.
         species_list (list): List of species names to include in the 'other' class.
@@ -122,11 +121,13 @@ def get_other_class(ds_dir, species_list):
     other_dir = os.path.join(ds_dir, 'other')
     if not os.path.exists(other_dir):
         os.makedirs(other_dir)
-    
+    other_dict = {}
     for spec in species_list:
         species_path = os.path.join(ds_dir, spec)
         if os.path.exists(species_path) and os.path.isdir(species_path):
-            for file in os.listdir(species_path):
+            files = os.listdir(species_path)
+            other_dict[spec] = files
+            for file in files:
                 src_file = os.path.join(species_path, file)
                 dst_file = os.path.join(other_dir, file)
                 if os.path.isfile(src_file):
@@ -137,6 +138,7 @@ def get_other_class(ds_dir, species_list):
                         continue
                     except Exception as e:
                         print(f"Error creating symlink for {src_file}: {e}")
+    return other_dict
 
 def get_file_count(ds_dir):
     """
@@ -152,9 +154,9 @@ def get_file_count(ds_dir):
         species_name = os.path.basename(subfolder)
         if species_name.startswith('.'):
             continue
-        if ' ' in species_name:
-            print(f'Renaming folder {species_name} to replace spaces with underscores.')
-            new_name = species_name.replace(' ', '_')
+        if ' ' in species_name or ',' in species_name:
+            print(f'Renaming folder {species_name} to replace spaces with underscores and commas with underscores.')
+            new_name = species_name.replace(' ', '_').replace(',', '')
             new_path = os.path.join(ds_dir, new_name)
             os.rename(subfolder, new_path)
             subfolder = new_path

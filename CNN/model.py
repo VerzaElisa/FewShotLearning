@@ -34,29 +34,6 @@ def setup_gpu():
 
 setup_gpu()
 
-@keras.saving.register_keras_serializable()
-class HandmadeAccuracy(keras.metrics.Metric):
-    def __init__(self, name="accuracy_handmade", **kwargs):
-        super().__init__(name=name, **kwargs)
-        self.correct = self.add_weight(name="correct", initializer="zeros")
-        self.total = self.add_weight(name="total", initializer="zeros")
-
-    def update_state(self, y_true, y_pred, sample_weight=None):
-        y_pred = tf.argmax(y_pred, axis=1)
-        y_true = tf.cast(tf.reshape(y_true, [-1]), tf.int64)
-
-        matches = tf.cast(tf.equal(y_true, y_pred), tf.float32)
-
-        self.correct.assign_add(tf.reduce_sum(matches))
-        self.total.assign_add(tf.cast(tf.size(y_true), tf.float32))
-
-    def result(self):
-        return {'tp_hm':self.correct, 'total':self.total}
-
-    def reset_state(self):
-        self.correct.assign(0.0)
-        self.total.assign(0.0)
-
 
 
 def calculate_confusion_matrix(y_true, y_pred, num_classes):
@@ -134,7 +111,7 @@ def create_model(w_h, n_classes):
     model.add(tf.keras.layers.Dense(n_classes, activation='softmax', kernel_initializer=initializer))
     return model
 
-def train(train_df, valid_df, patience, cp_path, w_h, n_classes, class_weight_dict, checkpoint_freq=5):
+def train(train_df, valid_df, test_df, patience, cp_path, w_h, n_classes, class_weight_dict, checkpoint_freq=5):
     """
     Train a CNN model using the provided training and validation datasets.
     Args:
@@ -156,7 +133,7 @@ def train(train_df, valid_df, patience, cp_path, w_h, n_classes, class_weight_di
     model.compile(
         loss='sparse_categorical_crossentropy',
         optimizer=tf.keras.optimizers.RMSprop(),
-        metrics=['accuracy', HandmadeAccuracy()]
+        metrics=['accuracy']
     )
     es_cb = tf.keras.callbacks.EarlyStopping(monitor="val_accuracy", patience=patience, mode="max", min_delta=0.001, restore_best_weights=True)
     cp_cb = tf.keras.callbacks.ModelCheckpoint(filepath=os.path.join(cp_dir, 'recovery_weights.weights.h5'), save_weights_only=True, save_freq=checkpoint_freq)
@@ -173,6 +150,7 @@ def train(train_df, valid_df, patience, cp_path, w_h, n_classes, class_weight_di
     
     print(history.history)
     model.save(os.path.join(CACHE_DIR, str(n_classes) + '_final_model.keras'))
+    model.evaluate(test_df, verbose=1)
     return history
 
 
