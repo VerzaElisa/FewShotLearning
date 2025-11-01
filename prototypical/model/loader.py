@@ -168,17 +168,14 @@ def embedding(support, w_h_c, model_dir):
         w_h_c (tuple): width, height, channels of the images
         model_dir (str): path to the trained model
     Returns (ndarray): prototypes of shape [embedding_dim,]"""
-    w, h, c = w_h_c
     model = tf.keras.models.load_model(model_dir)
     z = []
     for cat in support:
-        cat = tf.reshape(cat, [1, w, h, c])
+        cat = tf.reshape(cat, [1, w_h_c['w'], w_h_c['h'], w_h_c['c']])
         z.append(model(cat))
     z = tf.concat(z, axis=0)
-    print(f"initial shape {z.shape}")
     # Prototypes are means of n_support examples
     z_prototypes = tf.math.reduce_mean(z, axis=0)
-    print(f"prototypes shape {z_prototypes.shape}")
     return z_prototypes.numpy()
 
 
@@ -214,5 +211,5 @@ def get_samples(classes, n_support_dict, w_h_c, model_dir, data_dir):
     # Compute embeddings and save to csv
     embedding_df = pd.DataFrame(list(embedding_dict.items()), columns=['class', 'embeddings'])
     embedding_df['embeddings'] = embedding_df['embeddings'].apply(lambda x: embedding(x, w_h_c, model_dir))  
-    embedding_df.to_csv('proto_embeddings.csv', index=False)
+    embedding_df.to_pickle('proto_embeddings.pkl')
     return embedding_df

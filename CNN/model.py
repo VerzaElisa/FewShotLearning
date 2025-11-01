@@ -150,7 +150,16 @@ def train(train_df, valid_df, test_df, patience, cp_path, w_h, n_classes, class_
     
     print(history.history)
     model.save(os.path.join(CACHE_DIR, str(n_classes) + '_final_model.keras'))
+    
+    print("test evaluation")
     model.evaluate(test_df, verbose=1)
+    
+    print("validation evaluation")
+    model.evaluate(valid_df, verbose=1)
+    
+    print("training evaluation")
+    model.evaluate(train_df, verbose=1)
+
     return history
 
 

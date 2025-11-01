@@ -157,20 +157,28 @@ def check_training_accuracy(acc_per_epoch_train, acc_per_epoch_val, best_epoch):
     plt.grid(True)
     plt.show()
 
-def confusion_matrix_plot(cm, labels):
+def confusion_matrix_plot(cm, labels, percentage=True):
     """
     Plot percentage normalized confusion matrix.
     Args:
         cm: Confusion matrix as a 2D numpy array.
         labels: List of class labels.
     """
-    cmn = cm.astype('int') / cm.sum(axis=1)[:, np.newaxis]
+    if percentage:
+        cmn = cm.astype('int') / cm.sum(axis=1)[:, np.newaxis]
+        correct_dict = {label: value for label, value in zip(labels, cm.astype('int').diagonal())}
+        def custom_format(val):
+            if val < 0.01:
+                return "0"
+            else:
+                return f"{val:.2f}"
+    else:
+        cmn = cm.astype('int')
+        correct_dict = {label: f"{value}" for label, value in zip(labels, cmn.diagonal())}
+        def custom_format(val):
+            return val
 
-    def custom_format(val):
-        if val < 0.01:
-            return "0"
-        else:
-            return f"{val:.2f}"
+
     formatted_annotations = np.vectorize(custom_format)(cmn)
     plt.figure(figsize=(20, 20))
     sns.heatmap(cmn, annot=formatted_annotations, fmt='', cmap='Blues', xticklabels=labels, yticklabels=labels)
@@ -180,6 +188,7 @@ def confusion_matrix_plot(cm, labels):
     plt.xticks(rotation=45, ha='right')
     plt.tight_layout()
     plt.show()
+    return correct_dict
 
 def metrics_plot_builder(metrics_df):
     """

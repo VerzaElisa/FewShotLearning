@@ -54,6 +54,7 @@ def load_and_preprocess_image(img_path, sizes):
     return image
 
 def get_split(data_dir, classes, split_perc, h, w, batch_size=16):
+    print(f'h {h}, w {w}')
     rng = random.Random(seed)
     train_dict = {}
     val_dict = {}
@@ -89,7 +90,7 @@ def get_split(data_dir, classes, split_perc, h, w, batch_size=16):
     # from dataframe to tensors with image loading and preprocessing
     train_tensor = tf.data.Dataset.from_tensor_slices((train_df["filenames"].values, train_df["label"].values))
     train_tensor = train_tensor.map(lambda x, y: (load_and_preprocess_image(x, {'h': h, 'w': w}), y), num_parallel_calls=tf.data.AUTOTUNE)
-    train_tensor = train_tensor.shuffle(buffer_size=len(train_df), seed=2025)
+    train_tensor = train_tensor.shuffle(buffer_size=int(len(train_df)*0.5), seed=2025)
     
     val_tensor = tf.data.Dataset.from_tensor_slices((val_df["filenames"].values, val_df["label"].values))
     val_tensor = val_tensor.map(lambda x, y: (load_and_preprocess_image(x, {'h': h, 'w': w}), y), num_parallel_calls=tf.data.AUTOTUNE)

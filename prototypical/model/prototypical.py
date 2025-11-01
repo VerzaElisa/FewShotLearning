@@ -17,6 +17,7 @@ def calc_euclidian_dists(x, y):
     Returns (tf.Tensor): 2-dim tensor with distances.
 
     """
+    print(f"x shape: {x.shape}, y shape: {y.shape}")
     n = x.shape[0]
     m = y.shape[0]
     x = tf.tile(tf.expand_dims(x, 1), [1, m, 1])
