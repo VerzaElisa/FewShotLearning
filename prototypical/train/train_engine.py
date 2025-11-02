@@ -1,6 +1,7 @@
 import numpy as np
 
-
+np.random.seed(2019)
+ 
 class TrainEngine(object):
     """
     Engine that launches training per epochs and episodes.

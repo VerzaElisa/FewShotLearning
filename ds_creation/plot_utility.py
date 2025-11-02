@@ -123,9 +123,11 @@ def get_metrics(cm, label_dict):
     precision = np.divide(true_positives, true_positives + false_positives, out=np.zeros_like(true_positives, dtype=float), where=(true_positives + false_positives) != 0)
     recall = np.divide(true_positives, true_positives + false_negatives, out=np.zeros_like(true_positives, dtype=float), where=(true_positives + false_negatives) != 0)
     f1_score = np.divide(2 * precision * recall, precision + recall, out=np.zeros_like(precision, dtype=float), where=(precision + recall) != 0)
-    
+    accuracy = (true_positives) / support
+
     metrics_df = pd.DataFrame({
         'label': [label_dict[i]["label"] for i in range(num_classes)],
+        'accuracy': accuracy,
         'precision': precision,
         'recall': recall,
         'f1-score': f1_score,
@@ -133,7 +135,7 @@ def get_metrics(cm, label_dict):
         'tp': true_positives,
         'fp': false_positives,
         'fn': false_negatives,
-        'tn': true_negatives
+        'tn': true_negatives,
     })
 
     return metrics_df
@@ -198,10 +200,11 @@ def metrics_plot_builder(metrics_df):
     Returns:
         fig: Matplotlib figure object containing the plots.
     """
-    metrics_list = ['precision', 'recall', 'f1-score']
+    metrics_list = ['accuracy', 'precision', 'recall', 'f1-score']
     f = 1
     fig = plt.figure(figsize=(15, 15))
     for metric in metrics_list:
+        metrics_df = metrics_df.sort_values(by='support', ascending=False).reset_index(drop=True)
         axs = plt.subplot(2, 2, f)
         axs.bar(metrics_df['label'], metrics_df[metric], color="#87CEEB")
         for i, (metric_value, support) in enumerate(zip(metrics_df[metric], metrics_df['support'])):

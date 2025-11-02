@@ -5,6 +5,8 @@ from tensorflow.keras import Model
 from tensorflow.keras.models import load_model
 from math import floor
 
+np.random.seed(2019)
+tf.random.set_seed(2019)
 
 def calc_euclidian_dists(x, y):
     """
@@ -50,6 +52,7 @@ class Prototypical(Model):
             self.encoder.add(tf.keras.layers.ReLU())
             self.encoder.add(tf.keras.layers.MaxPool2D((2, 2)))
             lb = lb / 2
+        #self.encoder.add(tf.keras.layers.MaxPool2D((lb, lb)))
         self.encoder.add(tf.keras.layers.Flatten())
 
 
