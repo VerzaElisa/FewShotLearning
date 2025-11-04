@@ -184,9 +184,9 @@ def confusion_matrix_plot(cm, labels, percentage=True):
     formatted_annotations = np.vectorize(custom_format)(cmn)
     plt.figure(figsize=(20, 20))
     sns.heatmap(cmn, annot=formatted_annotations, fmt='', cmap='Blues', xticklabels=labels, yticklabels=labels)
-    plt.xlabel('Predicted Label')
-    plt.ylabel('True Label')
-    plt.title('Confusion Matrix')
+    plt.xlabel('Classe Predetta')
+    plt.ylabel('Classe Reale')
+    plt.title('Matrice di Confusione')
     plt.xticks(rotation=45, ha='right')
     plt.tight_layout()
     plt.show()
@@ -210,10 +210,10 @@ def metrics_plot_builder(metrics_df):
         for i, (metric_value, support) in enumerate(zip(metrics_df[metric], metrics_df['support'])):
             label_pos = metric_value - (metric_value/2) if metric_value > 0 else metric_value + 0.02
             plt.text(i, label_pos, f'n:{int(support)}', ha='center', va='bottom', fontsize=9, rotation=90)
-        axs.set_xlabel('Class')
+        axs.set_xlabel('Classi')
         axs.tick_params(axis='x', rotation=90)
         axs.set_ylabel(metric.capitalize())
-        axs.set_title(f'{metric.capitalize()} per Class (ordered by Support - descending)')
+        axs.set_title(f'{metric.capitalize()} per Classe')
         
         f += 1
     fig.tight_layout()
