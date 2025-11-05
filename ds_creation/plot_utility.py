@@ -117,8 +117,10 @@ def get_metrics(cm, label_dict):
     false_positives = np.sum(cm, axis=0) - true_positives
     false_negatives = np.sum(cm, axis=1) - true_positives
 
+    cm_support = cm.sum(axis=1)
     support =  np.asarray([label_dict[i]["support"] for i in range(num_classes)], dtype=int)
-    true_negatives = np.sum(cm) - (true_positives + false_positives + false_negatives)
+    cnn_errors = support - cm_support
+    false_negatives += cnn_errors
 
     precision = np.divide(true_positives, true_positives + false_positives, out=np.zeros_like(true_positives, dtype=float), where=(true_positives + false_positives) != 0)
     recall = np.divide(true_positives, true_positives + false_negatives, out=np.zeros_like(true_positives, dtype=float), where=(true_positives + false_negatives) != 0)
@@ -135,7 +137,7 @@ def get_metrics(cm, label_dict):
         'tp': true_positives,
         'fp': false_positives,
         'fn': false_negatives,
-        'tn': true_negatives,
+        'cnn_errors': cnn_errors,
     })
 
     return metrics_df

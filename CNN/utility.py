@@ -83,10 +83,11 @@ def train_routine(count_df, patience, split_perc, data_dir, w_h, new_classes, to
         # same formula used in sklearn.utils.class_weight.compute_class_weight for 'balanced' mode
         class_weight_dict[class_num] = tot_train_files / (n_classes * cls_train_count)
 
-    split_ds = get_split(data_dir, class_list, split_perc, w_h[1], w_h[0])
-    test_tensor = get_test(os.path.join("data", "mammals_calls_test"), 'data_cache/CNN/label_to_index.csv', class_list, 164, 397)
     print(class_list)
     if to_train:
+        split_ds = get_split(data_dir, class_list, split_perc, w_h[1], w_h[0])
+        test_tensor = get_test(os.path.join("data", "mammals_calls_test"), 'data_cache/CNN/label_to_index.csv', class_list, 164, 397)
+
         history = train(split_ds['train'], split_ds['val'], test_tensor, patience=patience, cp_path='checkpoints', w_h=(w_h[0], w_h[1]), n_classes=n_classes, class_weight_dict=class_weight_dict)
         dest_folder = os.path.join(MODELS_METRICS_DIR, subfolder)
         if not os.path.exists(dest_folder):
